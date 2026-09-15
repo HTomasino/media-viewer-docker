@@ -13,7 +13,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -4738,7 +4737,7 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 		}
 	}()
 
-	// Step 2: Run ffmpeg with input from pipe and output WebP to stdout.
+	// Step 2: Run ffmpeg with input from pipe and output WebP to a temp FILE.
 	// Use CommandContext so ffmpeg is killed when the context expires (timeout
 	// or client disconnect). This prevents orphaned ffmpeg processes.
 	//
@@ -4747,8 +4746,28 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 	// "Invalid data found when processing input" because it can't detect the
 	// JPEG format from a non-seekable stream. The -f image2pipe flag tells ffmpeg
 	// to expect a single JPEG image from the pipe.
+	//
+	// OUTPUT MUST BE A SEEKABLE FILE, NOT pipe:1. ffmpeg's WebP pipe muxer
+	// writes placeholder size fields it cannot back-patch (RIFF size AND VP8
+	// chunk header), producing a container that ffmpeg itself accepts but
+	// Chromium's WebP demuxer rejects — modal/reader images "load and cache
+	// but display blank". A temp file takes the seekable-muxer path, identical
+	// to the thumbnail pipeline whose output decodes fine. Single images are
+	// tens to hundreds of KB, so the extra disk IO is negligible.
+	tmpOut, err := os.CreateTemp("", "mv-webp-*.webp")
+	if err != nil {
+		log.Printf("[MEDIA STREAM] Failed to create temp file for ffmpeg output: %v", err)
+		srcPipeReader.Close()
+		<-pipeDone
+		return false
+	}
+	tmpPath := tmpOut.Name()
+	tmpOut.Close()
+	defer os.Remove(tmpPath)
+
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-nostdin",
+		"-y",               // Overwrite the temp file (os.CreateTemp pre-creates it)
 		"-f", "image2pipe", // Input format: JPEG image from pipe (required for pipe input)
 		"-i", "pipe:0", // Read JPEG from stdin pipe
 		"-c:v", "libwebp", // WebP encoder
@@ -4756,23 +4775,13 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 		"-q:v", "80", // Quality
 		"-compression_level", "4", // Speed/quality balance
 		"-f", "webp", // Output format
-		"pipe:1", // Write WebP to stdout
+		tmpPath, // Seekable temp file: correct RIFF/VP8 sizes on the wire
 	)
 	cmd.Stdin = srcPipeReader
 
 	// Capture stderr for diagnostics on failure
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-
-	// Step 3: Create stdout pipe before starting ffmpeg.
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Printf("[MEDIA STREAM] Failed to create stdout pipe for ffmpeg: %v", err)
-		srcPipeReader.Close()
-		// Wait for pipe goroutine to finish
-		<-pipeDone
-		return false
-	}
 
 	if startErr := cmd.Start(); startErr != nil {
 		log.Printf("[MEDIA STREAM] Failed to start ffmpeg: %v", startErr)
@@ -4782,49 +4791,16 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 		return false
 	}
 
-	// Set Content-Type and headers. These are buffered by gin until the
-	// first write in c.Stream(), so if something goes wrong before we
-	// start streaming, they won't be committed to the wire.
-	c.Header("Content-Type", "image/webp")
-	c.Header("X-Cache", "MEMORY-STREAM-WEBP")
-	c.Header("X-Image-Bucket", strconv.Itoa(bucket))
-	c.Header("Cache-Control", mediaCacheControl)
-	// No Content-Length â€” chunked transfer encoding
-
 	// Add preload headers
 	if cfg.EnablePreloading && index >= 0 && total > 0 && (section == SectionImages || section == SectionHManga) {
 		addPreloadHeadersWithCount(c, "/api/media", sanitizedPath, section, bucket, index, total, preloadCount, nextPaths, prevPaths, width, height, dpr)
 	}
 
-	// Step 4: Capture ffmpeg's WebP output, fix the RIFF size header, and
-	// send the complete image with Content-Length.
-	//
-	// WHY NOT STREAM: ffmpeg writing WebP to a non-seekable pipe cannot know
-	// the final size when it emits the RIFF header, so it writes a placeholder
-	// (RIFF size = 8). The resulting file is a structurally invalid RIFF
-	// container: Chromium's WebP demuxer validates the declared size and
-	// REFUSES to decode the image (the <img> fires onerror / stays nw=0), even
-	// though the VP8 data after the header is perfectly fine. This made every
-	// nocache (modal/reader) image "load and cache but not display" while raw
-	// curl checks passed. Buffering the output (a single image is tens to
-	// hundreds of KB) lets us patch the declared RIFF size to the real payload
-	// length and send a complete, Content-Length'd response.
-	stdoutBytes, readErr := io.ReadAll(stdoutPipe)
-
-	if readErr != nil && ctx.Err() != nil {
-		// Context expired (timeout or client disconnect) — expected, don't log loudly
-		debugLog("[MEDIA STREAM] ffmpeg stream cancelled for %s: %v", sanitizedPath, ctx.Err())
-	} else if readErr != nil {
-		log.Printf("[MEDIA STREAM] Error reading ffmpeg output for %s: %v", sanitizedPath, readErr)
-	}
-
-	// Step 5: Wait for ffmpeg to finish and clean up.
-	// cmd.Wait() was called implicitly by CommandContext when the context expired,
-	// but we call it explicitly to gather the exit status and release resources.
+	// Step 3: Wait for ffmpeg to finish and clean up.
 	waitErr := cmd.Wait()
 	if waitErr != nil {
 		if ctx.Err() != nil {
-			// Context cancellation (timeout or client disconnect) â€” expected
+			// Context cancellation (timeout or client disconnect) — expected
 			debugLog("[MEDIA STREAM] ffmpeg cancelled for %s: ctx=%v cmd=%v", sanitizedPath, ctx.Err(), waitErr)
 		} else {
 			log.Printf("[MEDIA STREAM] ffmpeg exited with error for %s: %v (stderr: %s)", sanitizedPath, waitErr, stderr.String())
@@ -4832,7 +4808,7 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 	}
 
 	// Close the pipe read end to unblock the pipe goroutine if it hasn't exited yet.
-	// This is safe to call multiple times â€” io.PipeReader.Close returns an error
+	// This is safe to call multiple times — io.PipeReader.Close returns an error
 	// on second call but doesn't panic.
 	srcPipeReader.Close()
 
@@ -4840,12 +4816,13 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 	// This ensures we don't leak the goroutine.
 	<-pipeDone
 
-	// Validate and fix the RIFF container: ffmpeg's pipe muxer leaves the
-	// declared size at the placeholder value (8). Rewrite it to the actual
-	// payload length so decoders accept the file. bytes 4..8 = little-endian
-	// uint32 RIFF size (= total file size - 8).
-	if len(stdoutBytes) >= 12 && string(stdoutBytes[0:4]) == "RIFF" && string(stdoutBytes[8:12]) == "WEBP" {
-		binary.LittleEndian.PutUint32(stdoutBytes[4:8], uint32(len(stdoutBytes)-8))
+	// Step 4: Read the seekable-muxed WebP and send it complete with
+	// Content-Length. The seekable muxer writes correct RIFF/VP8 sizes, so no
+	// header patching is needed.
+	stdoutBytes, readErr := os.ReadFile(tmpPath)
+	if readErr != nil {
+		log.Printf("[MEDIA STREAM] Failed to read ffmpeg temp output for %s: %v", sanitizedPath, readErr)
+		return false
 	}
 
 	if len(stdoutBytes) == 0 {
@@ -4853,9 +4830,15 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 		return false
 	}
 
-	// Send the complete image. Content-Length now matches the (fixed) body,
-	// so the browser gets a deterministic, decodable response.
+	// Set Content-Type and headers.
+	c.Header("Content-Type", "image/webp")
+	c.Header("X-Cache", "MEMORY-STREAM-WEBP")
+	c.Header("X-Image-Bucket", strconv.Itoa(bucket))
+	c.Header("Cache-Control", mediaCacheControl)
 	c.Header("Content-Length", strconv.Itoa(len(stdoutBytes)))
+
+	// Send the complete image. Content-Length matches the body exactly, so the
+	// browser gets a deterministic, decodable response.
 	if _, writeErr := c.Writer.Write(stdoutBytes); writeErr != nil {
 		log.Printf("[MEDIA STREAM] Error writing WebP response for %s: %v", sanitizedPath, writeErr)
 	}
