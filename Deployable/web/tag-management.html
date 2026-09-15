@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,7 +6,7 @@
     <title>Tag Management - Media Viewer</title>
     <link rel="stylesheet" href="css/styles.css">
     <style>
-        /* Override global body overflow:hidden — this page needs scrolling */
+        /* Override global body overflow:hidden â€” this page needs scrolling */
         body {
             overflow-y: auto !important;
             overflow-x: hidden !important;
@@ -356,28 +356,6 @@
         }
 
         /* Batch Operations Bar */
-        .batch-bar {
-            position: sticky;
-            bottom: 1rem;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .batch-bar .selection-info {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-
-        .batch-bar .actions {
-            display: flex;
-            gap: 0.5rem;
-        }
 
         /* Thumbnail Status */
         .thumbnail-status {
@@ -640,8 +618,7 @@
         
         <!-- View Tabs -->
         <div class="view-tabs">
-            <button class="view-btn active" id="view-files-btn">Files</button>
-            <button class="view-btn" id="view-dirs-btn">Directories</button>
+            <button class="view-btn active" id="view-console-btn">Console</button>
             <button class="view-btn" id="view-tags-btn">Tag Browser</button>
             <button class="view-btn" id="view-thumbnails-btn">Thumbnails</button>
         </div>
@@ -702,7 +679,7 @@
             <div class="gotify-settings-grid" id="gotify-settings-grid"></div>
             <div id="gotify-pending-info" style="margin-bottom: 1rem;" class="hidden">
                 <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px;">
-                    <span style="color: #f59e0b;">⚠</span>
+                    <span style="color: #f59e0b;">âš </span>
                     <span id="gotify-pending-count" style="color: var(--text-primary);">0 chapters have not been notified</span>
                 </div>
             </div>
@@ -731,7 +708,7 @@
             <div class="discord-settings-grid" id="discord-settings-grid"></div>
             <div id="discord-pending-info" style="margin-bottom: 1rem;" class="hidden">
                 <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px;">
-                    <span style="color: #f59e0b;">⚠</span>
+                    <span style="color: #f59e0b;">âš </span>
                     <span id="discord-pending-count" style="color: var(--text-primary);">0 chapters have not been notified</span>
                 </div>
             </div>
@@ -807,37 +784,43 @@
             </div>
         </div>
 
-        <!-- Files View -->
-        <div id="files-view" class="section-panel">
+        <!-- Console View (replaces Files + Directories tabs) -->
+        <div id="console-view" class="section-panel">
             <h2 class="section-title">
-                Files
+                Server Console
                 <div class="actions">
-                    <button class="btn-secondary btn-small" id="btn-select-all">Select All</button>
-                    <button class="btn-secondary btn-small" id="btn-select-none">Select None</button>
+                    <button class="btn-secondary btn-small" id="console-pause-btn">Pause</button>
+                    <button class="btn-secondary btn-small hidden" id="console-resume-btn">Resume</button>
+                    <button class="btn-secondary btn-small hidden" id="console-refresh-btn">Refresh Now</button>
+                    <button class="btn-secondary btn-small" id="console-clear-btn">Clear View</button>
+                    <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-left:0.5rem;font-size:0.85rem;">
+                        <input type="checkbox" id="console-autoscroll" checked> Auto-scroll
+                    </input>
+                    </label>
                 </div>
             </h2>
-            <div id="files-list" style="max-height: 600px; overflow-y: auto;">
-                <!-- Files rendered here -->
+            <pre id="console-output" style="
+                background: var(--bg-primary);
+                border: 1px solid var(--border-color);
+                border-radius: 4px;
+                padding: 0.75rem;
+                max-height: 600px;
+                min-height: 300px;
+                overflow-y: auto;
+                overflow-x: auto;
+                font-family: 'Consolas', 'Menlo', monospace;
+                font-size: 0.8rem;
+                line-height: 1.35;
+                white-space: pre-wrap;
+                word-break: break-all;
+                color: var(--text-primary);
+                margin: 0;
+            "><span class="text-secondary">Loading console outputâ€¦</span></pre>
+            <div class="text-secondary" id="console-status" style="font-size: 0.8rem; margin-top: 0.5rem;">
+                Live â€” polling every 3s
             </div>
         </div>
 
-        <!-- Directories View -->
-        <div id="dirs-view" class="section-panel hidden">
-            <h2 class="section-title">Directories</h2>
-            <div id="dirs-list">
-                <!-- Directories rendered here -->
-            </div>
-        </div>
-
-        <!-- Batch Operations Bar -->
-        <div id="batch-bar" class="batch-bar hidden">
-            <span class="selection-info"><span id="selected-count">0</span> items selected</span>
-            <div class="actions">
-                <button class="btn-primary btn-small" id="batch-add-tags">Add Tags</button>
-                <button class="btn-secondary btn-small" id="batch-remove-tags">Remove Tags</button>
-                <button class="btn-danger btn-small" id="batch-clear-tags">Clear All</button>
-            </div>
-        </div>
 
         <div style="margin-top: 2rem; text-align: center;">
             <button class="btn-secondary" id="btn-back-to-gallery">&larr; Back to Gallery</button>

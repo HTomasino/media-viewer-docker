@@ -151,6 +151,7 @@ func (n *DiscordNotifier) NotifyBatch(series, section string, chapters []string)
 		return false
 	}
 
+	log.Printf("[DISCORD] Notification pushed for %s (%s): %d new chapter(s)", series, section, len(chapters))
 	n.cooldown.Store(key, cooldownEntry{lastSent: time.Now()})
 	n.tracker.Mark(section, series, chapters)
 	return true
@@ -194,6 +195,7 @@ func (n *DiscordNotifier) NotifyArchiveBatch(artist, section string, archives []
 		return false
 	}
 
+	log.Printf("[DISCORD] Notification pushed for %s (%s): %d new archive(s)", artist, section, len(archives))
 	n.cooldown.Store(key, cooldownEntry{lastSent: time.Now()})
 	n.tracker.MarkArchive(section, artist, archives)
 	return true

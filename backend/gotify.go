@@ -21,7 +21,7 @@ import (
 type GotifyConfig struct {
 	Enabled bool `json:"enabled"`
 	// ServerURL, when set, points at an EXTERNAL gotify server (e.g. its own
-	// container) — the notifier then never spawns a bundled server child.
+	// container) â€” the notifier then never spawns a bundled server child.
 	// Empty = spawn the bundled binary (Windows-only deployment; the bundled
 	// binary is a Windows .exe and the official Linux release is glibc-linked,
 	// so it can't run inside the musl media-viewer image).
@@ -49,7 +49,7 @@ type NewChapter struct {
 // NewArchive represents a newly-detected compressed archive file inside an
 // h-manga artist directory. The notification system uses this (instead of
 // NewChapter) for h-manga so a message contains the artist name and only
-// fires when an archive file is added — book subdirectories inside an
+// fires when an archive file is added â€” book subdirectories inside an
 // artist's folder are intentionally NOT notified.
 type NewArchive struct {
 	Artist  string // artist directory name (= top-level h-manga subdirectory)
@@ -133,17 +133,17 @@ func (n *GotifyNotifier) Start() error {
 			}
 			n.appToken = token
 			n.config.AppToken = token
-			log.Printf("[GOTIFY] Created app token on external server: %s — persisting to config", token)
+			log.Printf("[GOTIFY] Created app token on external server: %s â€” persisting to config", token)
 			if currentConfig != nil {
 				currentConfig.Gotify.AppToken = token
 				if err := saveConfig(); err != nil {
-					log.Printf("[GOTIFY] Warning: failed to save app token to config: %v — token is in-memory only", err)
+					log.Printf("[GOTIFY] Warning: failed to save app token to config: %v â€” token is in-memory only", err)
 				}
 			}
 		} else {
 			// Configured token: no side-effect-free validation route exists
 			// (app tokens only authenticate /message, and probing it creates
-			// a message). Validate lazily — sendNotification detects a
+			// a message). Validate lazily â€” sendNotification detects a
 			// 401/403 (stale token: fresh server or wiped data dir) and
 			// re-creates the app via admin credentials once, in-band.
 			n.appToken = n.config.AppToken
@@ -165,7 +165,7 @@ func (n *GotifyNotifier) Start() error {
 	// of the confusing exec error later.
 	if runtime.GOOS != "windows" {
 		return fmt.Errorf(
-			"bundled gotify child process is not supported on %s — set gotify.server_url in config to point at an external gotify server (e.g. its own container)",
+			"bundled gotify child process is not supported on %s â€” set gotify.server_url in config to point at an external gotify server (e.g. its own container)",
 			runtime.GOOS)
 	}
 
@@ -242,7 +242,7 @@ func (n *GotifyNotifier) Start() error {
 	if err := n.healthCheck(); err != nil {
 		// Clean up the child WITHOUT calling Stop(): Stop() does startDone.Wait(),
 		// but we're running inside Start() which is being awaited on startDone
-		// by the background goroutine — calling Stop() here would self-deadlock.
+		// by the background goroutine â€” calling Stop() here would self-deadlock.
 		// stopChild() does the signal/kill/wait without the WaitGroup wait.
 		n.stopChild()
 		return fmt.Errorf("gotify health check failed: %w", err)
@@ -256,7 +256,7 @@ func (n *GotifyNotifier) Start() error {
 		} else {
 			n.appToken = token
 			n.config.AppToken = token
-			log.Printf("[GOTIFY] Created app token: %s — persisting to config", token)
+			log.Printf("[GOTIFY] Created app token: %s â€” persisting to config", token)
 			// Persist the new token to config so we don't create a duplicate
 			// app on restart. If the save fails the token is still kept in
 			// memory and used for this session; retry once after a short delay
@@ -266,10 +266,10 @@ func (n *GotifyNotifier) Start() error {
 			if currentConfig != nil {
 				currentConfig.Gotify.AppToken = token
 				if err := saveConfig(); err != nil {
-					log.Printf("[GOTIFY] Warning: failed to save app token to config: %v — retrying once", err)
+					log.Printf("[GOTIFY] Warning: failed to save app token to config: %v â€” retrying once", err)
 					time.Sleep(2 * time.Second)
 					if err := saveConfig(); err != nil {
-						log.Printf("[GOTIFY] Warning: app token save retry also failed: %v — token is in-memory only and will be lost on restart", err)
+						log.Printf("[GOTIFY] Warning: app token save retry also failed: %v â€” token is in-memory only and will be lost on restart", err)
 					}
 				}
 			}
@@ -280,11 +280,11 @@ func (n *GotifyNotifier) Start() error {
 		// sendNotification will return 401/403 and log the failure per-request,
 		// at which point the user can trigger a reset via the API. We don't
 		// probe gotify here because there's no side-effect-free app-token-
-		// authenticated GET route — /message is POST-only (it creates
+		// authenticated GET route â€” /message is POST-only (it creates
 		// messages), so probing it would either 404 (always "invalid") or
 		// create a spurious notification. Eager validation that always fails
 		// would recreate the app on EVERY restart, orphaning the old one and
-		// accumulating duplicates — the exact bug the token persistence above
+		// accumulating duplicates â€” the exact bug the token persistence above
 		// exists to prevent.
 		n.appToken = n.config.AppToken
 		log.Printf("[GOTIFY] Using configured app token")
@@ -318,7 +318,7 @@ func (n *GotifyNotifier) UpdateConfig(cfg GotifyConfig) {
 // stopChild signals and waits for the gotify child process to exit, then nils
 // n.cmd. It does NOT wait on startDone (so it is safe to call from inside
 // Start()'s failure path, which runs in the same goroutine that holds
-// startDone — calling Stop() there would self-deadlock on startDone.Wait()).
+// startDone â€” calling Stop() there would self-deadlock on startDone.Wait()).
 func (n *GotifyNotifier) stopChild() {
 	// External-server mode: nothing to stop (no child process was spawned).
 	if n.config.ServerURL != "" {
@@ -373,7 +373,7 @@ func (n *GotifyNotifier) stopChild() {
 
 func (n *GotifyNotifier) Stop() {
 	// If a background Start() is still in flight, wait for it to finish before
-	// touching n.cmd — otherwise Stop() could signal a process Start() hasn't
+	// touching n.cmd â€” otherwise Stop() could signal a process Start() hasn't
 	// spawned yet, or race on the n.cmd field itself. The WaitGroup is Add()ed
 	// by the goroutine launcher in main() before Start() runs. NOTE: Start()'s
 	// own failure path calls stopChild() (not Stop()) to avoid self-deadlock,
@@ -393,7 +393,7 @@ func (n *GotifyNotifier) healthCheck() error {
 				return nil
 			}
 		}
-		// External servers are usually already up — fail fast instead of
+		// External servers are usually already up â€” fail fast instead of
 		// waiting the full 30s retry window when the URL is simply wrong.
 		if n.config.ServerURL != "" && i == 0 && err != nil {
 			break
@@ -484,10 +484,11 @@ func (n *GotifyNotifier) Notify(manga, chapter, section string) bool {
 	message := fmt.Sprintf("Chapter \"%s\" has been added to %s", chapter, section)
 	err := n.sendNotification(title, message, n.config.DefaultPriority)
 	if err != nil {
-		log.Printf("[GOTIFY] Notify failed for %s chapter %q: %v — not marking as notified, will retry", manga, chapter, err)
+		log.Printf("[GOTIFY] Notify failed for %s chapter %q: %v â€” not marking as notified, will retry", manga, chapter, err)
 		return false
 	}
 
+	log.Printf("[GOTIFY] Notification pushed for %s (%s): 1 new chapter", manga, section)
 	// Only mark as notified and store cooldown after confirmed success
 	n.cooldown.Store(key, cooldownEntry{lastSent: time.Now()})
 	n.tracker.Mark(section, manga, []string{chapter})
@@ -529,10 +530,11 @@ func (n *GotifyNotifier) NotifyBatch(manga, section string, chapters []string) b
 
 	err := n.sendNotification(title, message, n.config.DefaultPriority)
 	if err != nil {
-		log.Printf("[GOTIFY] NotifyBatch failed for %s (%d chapters): %v — not marking as notified, will retry", manga, len(chapters), err)
+		log.Printf("[GOTIFY] NotifyBatch failed for %s (%d chapters): %v â€” not marking as notified, will retry", manga, len(chapters), err)
 		return false
 	}
 
+	log.Printf("[GOTIFY] Notification pushed for %s (%s): %d new chapter(s)", manga, section, len(chapters))
 	// Only mark as notified and store cooldown after confirmed success
 	n.cooldown.Store(key, cooldownEntry{lastSent: time.Now()})
 	n.tracker.Mark(section, manga, chapters)
@@ -584,10 +586,11 @@ func (n *GotifyNotifier) NotifyArchiveBatch(artist, section string, archives []s
 
 	err := n.sendNotification(title, message, n.config.DefaultPriority)
 	if err != nil {
-		log.Printf("[GOTIFY] NotifyArchiveBatch failed for artist=%s (%d archives): %v — not marking as notified, will retry", artist, len(archives), err)
+		log.Printf("[GOTIFY] NotifyArchiveBatch failed for artist=%s (%d archives): %v â€” not marking as notified, will retry", artist, len(archives), err)
 		return false
 	}
 
+	log.Printf("[GOTIFY] Notification pushed for %s (%s): %d new archive(s)", artist, section, len(archives))
 	n.cooldown.Store(key, cooldownEntry{lastSent: time.Now()})
 	n.tracker.MarkArchive(section, artist, archives)
 	return true
@@ -596,7 +599,7 @@ func (n *GotifyNotifier) NotifyArchiveBatch(artist, section string, archives []s
 func (n *GotifyNotifier) sendNotification(title, message string, priority int) error {
 	_, err := n.postMessage(title, message, priority)
 	// 401/403 with a configured token means the token is stale (fresh server
-	// or wiped data dir — report #4's silent-401 trap). Re-create the app via
+	// or wiped data dir â€” report #4's silent-401 trap). Re-create the app via
 	// admin credentials and retry once, in-band. Guarded by a flag so a
 	// persistently broken setup can't loop: each send attempt re-creates at
 	// most one app.
@@ -604,18 +607,18 @@ func (n *GotifyNotifier) sendNotification(title, message string, priority int) e
 		return nil
 	}
 	if n.config.ServerURL != "" && n.adminRecreateEnabled() && isAuthFailure(err) {
-		log.Printf("[GOTIFY] Token rejected by external server (%v) — recreating app via admin credentials", err)
+		log.Printf("[GOTIFY] Token rejected by external server (%v) â€” recreating app via admin credentials", err)
 		token, createErr := n.createApp()
 		if createErr != nil {
 			return fmt.Errorf("token invalid and app re-create failed: %w", createErr)
 		}
 		n.appToken = token
 		n.config.AppToken = token
-		log.Printf("[GOTIFY] Created replacement app token: %s — persisting to config", token)
+		log.Printf("[GOTIFY] Created replacement app token: %s â€” persisting to config", token)
 		if currentConfig != nil {
 			currentConfig.Gotify.AppToken = token
 			if err := saveConfig(); err != nil {
-				log.Printf("[GOTIFY] Warning: failed to save app token to config: %v — token is in-memory only and will be lost on restart", err)
+				log.Printf("[GOTIFY] Warning: failed to save app token to config: %v â€” token is in-memory only and will be lost on restart", err)
 			}
 		}
 		// Retry the original send once with the fresh token.
@@ -758,13 +761,32 @@ func diffMangaChapters(prev map[string][]string, current []Series, section strin
 		}
 	}
 
+	// Console-view visibility: log each discovered chapter/series. New
+	// series (first appearance in the snapshot) count as a book discovery.
+	if len(result) > 0 {
+		newSeries := make(map[string]bool)
+		for series := range currMap {
+			if len(prev[series]) == 0 {
+				newSeries[series] = true
+			}
+		}
+		for series := range newSeries {
+			log.Printf("[DISCOVERY] New series in %s: %s", section, series)
+		}
+		for _, nc := range result {
+			if !newSeries[nc.Series] {
+				log.Printf("[DISCOVERY] New chapter in %s: %s — %s", nc.Section, nc.Series, nc.Chapter)
+			}
+		}
+	}
+
 	return result
 }
 
 // getHMangaArchiveSnapshot walks the h-manga root directory and returns a
 // per-artist list of archive filenames (.zip / .cbz / .rar / .7z) found
 // directly inside each artist directory. Unlike getMangaChapterSnapshot,
-// this does NOT consult the in-memory DB — the archive set is purely
+// this does NOT consult the in-memory DB â€” the archive set is purely
 // disk-derived because archive files are not represented as chapters in
 // the h-manga DB (IsMediaFile returns false for them). Used to detect
 // newly-added archives between consecutive scans.
@@ -792,7 +814,7 @@ func getHMangaArchiveSnapshot(rootDir string) map[string][]string {
 		subEntries, err := os.ReadDir(artistPath)
 		if err != nil {
 			// Skip unreadable artist dirs (permission, transient failure)
-			// but keep the rest of the snapshot — partial visibility is
+			// but keep the rest of the snapshot â€” partial visibility is
 			// better than no visibility, and the diff will not flag any
 			// archives from the skipped dir as new because it isn't in
 			// `current` for that artist.
@@ -819,7 +841,7 @@ func getHMangaArchiveSnapshot(rootDir string) map[string][]string {
 // the artist name. Order within each artist is unspecified (callers sort
 // for display if they care).
 //
-// If either snapshot is nil (the snapshot read failed — typically a
+// If either snapshot is nil (the snapshot read failed â€” typically a
 // transient network-drive hiccup), returns nil so the caller can skip
 // the diff entirely. Treating a failed read as "everything is new" would
 // produce a mass notification when the drive recovers.
@@ -842,6 +864,11 @@ func diffHMangaArchives(prev, current map[string][]string) []NewArchive {
 				})
 			}
 		}
+	}
+
+	// Console-view visibility: log each newly-discovered archive (book).
+	for _, na := range result {
+		log.Printf("[DISCOVERY] New archive (book) for artist %s: %s", na.Artist, na.Archive)
 	}
 	return result
 }
@@ -913,7 +940,7 @@ func (n *GotifyNotifier) PushPendingNotifications(db *InMemoryDB, cfg *Config) i
 				sent++
 			} else {
 				failed++
-				log.Printf("[GOTIFY] PushPendingNotifications: failed to send for series=%s section=%s (%d chapters) — will remain in pending list", series, section, len(chapters))
+				log.Printf("[GOTIFY] PushPendingNotifications: failed to send for series=%s section=%s (%d chapters) â€” will remain in pending list", series, section, len(chapters))
 			}
 		}
 		if failed > 0 {
@@ -940,7 +967,7 @@ func (n *GotifyNotifier) PushPendingNotifications(db *InMemoryDB, cfg *Config) i
 						sent++
 					} else {
 						failed++
-						log.Printf("[GOTIFY] PushPendingNotifications: failed to send for artist=%s section=%s (%d archives) — will remain in pending list", artist, section, len(archives))
+						log.Printf("[GOTIFY] PushPendingNotifications: failed to send for artist=%s section=%s (%d archives) â€” will remain in pending list", artist, section, len(archives))
 					}
 				}
 				if failed > 0 {

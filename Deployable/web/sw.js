@@ -132,7 +132,7 @@
 //  - parseChapterName returns the stripped name in non-numeric fallback
 //    branches for consistency with its numeric branches.
 
-const CACHE_NAME = 'media-viewer-v44';
+const CACHE_NAME = 'media-viewer-v45';
 const API_CACHE_NAME = 'media-viewer-api-v2';
 const API_CACHE_MAX_ENTRIES = 50;
 

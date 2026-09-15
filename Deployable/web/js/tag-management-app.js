@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tag Management App - ES6 Modular Version
  * Enhanced with tag browser, batch operations, thumbnail management
  */
@@ -16,8 +16,12 @@ class TagManagementApp {
         this.allMangaDirs = [];
         this.allDirFormats = new Map();
         this.isServerMode = false;
-        this.currentView = 'files';
-        this.selectedFiles = new Set();
+        this.currentView = 'console';
+        // Console view state: polling timer, cursor into the backend log
+        // ring, and the paused flag.
+        this.consoleTimer = null;
+        this.consoleCursor = 0;
+        this.consolePaused = false;
         this.tagStats = [];
         this.autocompleteIndex = -1;
         this.thumbnailGenerationProgress = { current: 0, total: 0 };
@@ -39,6 +43,15 @@ class TagManagementApp {
         // so the page is interactive even before any server data arrives.
         this.renderExcludedTags();
         this.loadDirectoryNames();
+
+        // Open the Console view by default (it replaced Files/Directories as
+        // the operational view). switchView triggers the first poll.
+        this.switchView('console', document.getElementById('view-console-btn'));
+
+        // Start the console poller immediately (independent of mode ? server
+        // mode hits /api/logs; local mode shows a notice since there is no
+        // backend to query).
+        this.startConsolePolling();
 
         if (!this.isServerMode) {
             // Local/IndexedDB mode: load everything, no busy-backend concern.
@@ -63,21 +76,16 @@ class TagManagementApp {
         // frozen page. Each task is self-contained: it renders its own view
         // on success and shows a lightweight "backend busy" placeholder on
         // failure, without throwing up to the top-level handler.
-        this.renderFilesView();
-        this.renderDirsView();
         this.renderTagStats();
         this.renderThumbnailStatus(null);
         this.renderGotifyStatus({ running: false, enabled: false });
         this.renderDiscordStatus({ enabled: false, ready: false });
-        this.markLoading('files-list', 'Loading files...');
-        this.markLoading('dirs-list', 'Loading directories...');
         this.markLoading('tag-cloud', 'Loading tags...');
         this.markLoading('thumbnail-status', 'Loading thumbnail status...');
         this.markLoading('gotify-status', 'Loading Gotify status...');
         this.markLoading('discord-status', 'Loading Discord status...');
 
         const results = await Promise.allSettled([
-            this.loadFromServer(),
             this.loadTagStats(),
             this.loadThumbnailStatus(),
             this.loadGotifyStatus(),
@@ -109,12 +117,8 @@ class TagManagementApp {
 
     setupEventListeners() {
         // View tabs
-        document.getElementById('view-files-btn')?.addEventListener('click', (e) => {
-            this.switchView('files', e.currentTarget);
-        });
-
-        document.getElementById('view-dirs-btn')?.addEventListener('click', (e) => {
-            this.switchView('dirs', e.currentTarget);
+        document.getElementById('view-console-btn')?.addEventListener('click', (e) => {
+            this.switchView('console', e.currentTarget);
         });
 
         document.getElementById('view-tags-btn')?.addEventListener('click', (e) => {
@@ -124,6 +128,12 @@ class TagManagementApp {
         document.getElementById('view-thumbnails-btn')?.addEventListener('click', (e) => {
             this.switchView('thumbnails', e.currentTarget);
         });
+
+        // Console controls
+        document.getElementById('console-pause-btn')?.addEventListener('click', () => this.setConsolePaused(true));
+        document.getElementById('console-resume-btn')?.addEventListener('click', () => this.setConsolePaused(false));
+        document.getElementById('console-refresh-btn')?.addEventListener('click', () => this.pollConsole(true));
+        document.getElementById('console-clear-btn')?.addEventListener('click', () => this.clearConsoleView());
 
         // Global exclusions
         document.getElementById('btn-add-exclusion')?.addEventListener('click', () => {
@@ -142,15 +152,6 @@ class TagManagementApp {
         document.querySelectorAll('.clear-dir-btn').forEach(btn => {
             btn.addEventListener('click', () => this.clearSectionDirectory(btn.dataset.section));
         });
-
-        // File selection
-        document.getElementById('btn-select-all')?.addEventListener('click', () => this.selectAllFiles());
-        document.getElementById('btn-select-none')?.addEventListener('click', () => this.selectNone());
-
-        // Batch operations
-        document.getElementById('batch-add-tags')?.addEventListener('click', () => this.batchAddTags());
-        document.getElementById('batch-remove-tags')?.addEventListener('click', () => this.batchRemoveTags());
-        document.getElementById('batch-clear-tags')?.addEventListener('click', () => this.batchClearTags());
 
         // Tag browser
         document.getElementById('tag-search')?.addEventListener('input', (e) => {
@@ -309,20 +310,10 @@ class TagManagementApp {
             if (Array.isArray(mangaFolders)) this.allMangaDirs.push(...mangaFolders);
             if (Array.isArray(hmangaFolders)) this.allMangaDirs.push(...hmangaFolders);
 
-            this.renderFilesView();
-            this.renderDirsView();
         } catch (e) {
             console.error('[TAG-MGMT] Server load error:', e);
-            // Show an explicit error state instead of leaving the loading
-            // placeholder forever. Users can switch tabs to retry.
-            const filesList = document.getElementById('files-list');
-            if (filesList) {
-                filesList.innerHTML = '<p class="text-secondary">Couldn\'t load files ? the backend may be busy scanning. Try switching to another tab and back.</p>';
-            }
-            const dirsList = document.getElementById('dirs-list');
-            if (dirsList) {
-                dirsList.innerHTML = '<p class="text-secondary">Couldn\'t load directories ? the backend may be busy scanning. Try switching to another tab and back.</p>';
-            }
+            // Surface the failure via the summary notification (init's
+            // allSettled handler); there is no per-view panel to update.
             // Re-throw so Promise.allSettled in init() records the rejection
             // for the summary notification; each view already shows its state.
             throw e;
@@ -346,8 +337,6 @@ class TagManagementApp {
                 }
             }
 
-            this.renderFilesView();
-            this.renderDirsView();
         } catch (e) {
             console.error('[TAG-MGMT] IndexedDB load error:', e);
         }
@@ -400,20 +389,17 @@ class TagManagementApp {
         btn?.classList.add('active');
 
         // Hide all views
-        document.getElementById('files-view').style.display = 'none';
-        document.getElementById('dirs-view').style.display = 'none';
+        document.getElementById('console-view')?.classList.add('hidden');
         document.getElementById('tag-browser-view')?.classList.add('hidden');
         document.getElementById('thumbnails-view')?.classList.add('hidden');
 
         // Show selected view
         switch (view) {
-            case 'files':
-                document.getElementById('files-view').style.display = 'block';
-                this.renderFilesView();
-                break;
-            case 'dirs':
-                document.getElementById('dirs-view').style.display = 'block';
-                this.renderDirsView();
+            case 'console':
+                document.getElementById('console-view')?.classList.remove('hidden');
+                // Poll immediately so the view is populated on open, then
+                // keep the regular interval running.
+                this.pollConsole();
                 break;
             case 'tags':
                 document.getElementById('tag-browser-view')?.classList.remove('hidden');
@@ -425,457 +411,81 @@ class TagManagementApp {
         }
     }
 
-    // File Management
-    renderFilesView() {
-        const container = document.getElementById('files-list');
-        if (!container) return;
+    // ===== Server Console =====
 
-        container.innerHTML = '';
-
-        if (!this.allImageFiles.length) {
-            container.innerHTML = '<p>No files found. Scan a directory first.</p>';
-            return;
-        }
-
-        const table = document.createElement('table');
-        table.className = 'data-table';
-
-        table.innerHTML = `
-            <thead>
-                <tr>
-                    <th class="checkbox-cell"><input type="checkbox" id="select-all-header"></th>
-                    <th>Name</th>
-                    <th>Path</th>
-                    <th>Tags</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-        `;
-
-        const tbody = document.createElement('tbody');
-
-        this.allImageFiles.forEach((file, index) => {
-            const row = document.createElement('tr');
-            row.dataset.path = file.path;
-            row.dataset.index = index;
-
-            const isSelected = this.selectedFiles.has(file.path);
-            if (isSelected) row.classList.add('selected');
-
-            row.innerHTML = `
-                <td class="checkbox-cell"><input type="checkbox" ${isSelected ? 'checked' : ''}></td>
-                <td>${escapeHtml(file.name)}</td>
-                <td>${escapeHtml(file.path)}</td>
-                <td class="tags-cell">${this.renderTagsCell(file.tags || [], file.path)}</td>
-                <td>
-                    <button class="btn-icon edit-tags-btn" data-path="${escapeHtml(file.path)}" title="Edit tags">
-                        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
-                    </button>
-                    <button class="btn-icon generate-thumb-btn" data-path="${escapeHtml(file.path)}" title="Generate thumbnail">
-                        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M5 3C3.89 3 3 3.89 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3M5 19V5H19V19M14.5 7L11 13L9 11L7 14H17"/></svg>
-                    </button>
-                </td>
-            `;
-
-            tbody.appendChild(row);
-        });
-
-        table.appendChild(tbody);
-        container.appendChild(table);
-
-        // Event listeners
-        tbody.querySelectorAll('tr').forEach(row => {
-            const checkbox = row.querySelector('input[type="checkbox"]');
-            checkbox.addEventListener('change', () => {
-                const path = row.dataset.path;
-                if (checkbox.checked) {
-                    this.selectedFiles.add(path);
-                    row.classList.add('selected');
-                } else {
-                    this.selectedFiles.delete(path);
-                    row.classList.remove('selected');
-                }
-                this.updateBatchBar();
-            });
-        });
-
-        tbody.querySelectorAll('.edit-tags-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const path = e.currentTarget.closest('tr').dataset.path;
-                this.editFileTagsInline(path);
-            });
-        });
-
-        tbody.querySelectorAll('.generate-thumb-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const path = e.currentTarget.dataset.path;
-                await this.generateThumbnail(path);
-            });
-        });
-
-        // Header checkbox
-        const headerCheckbox = table.querySelector('#select-all-header');
-        headerCheckbox.addEventListener('change', () => {
-            const checkboxes = tbody.querySelectorAll('input[type="checkbox"]');
-            checkboxes.forEach(cb => {
-                cb.checked = headerCheckbox.checked;
-                const row = cb.closest('tr');
-                const path = row.dataset.path;
-                if (headerCheckbox.checked) {
-                    this.selectedFiles.add(path);
-                    row.classList.add('selected');
-                } else {
-                    this.selectedFiles.delete(path);
-                    row.classList.remove('selected');
-                }
-            });
-            this.updateBatchBar();
-        });
-    }
-
-    renderTagsCell(tags, filePath) {
-        if (!tags || tags.length === 0) {
-            return '<span class="text-secondary">No tags</span>';
-        }
-        return tags.map(t => `<span class="tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join(' ');
-    }
-
-    async editFileTagsInline(filePath) {
-        const file = this.allImageFiles.find(f => f.path === filePath);
-        if (!file) return;
-
-        const cell = document.querySelector(`tr[data-path="${CSS.escape(filePath)}"] .tags-cell`);
-        if (!cell) return;
-
-        const editor = document.createElement('div');
-        editor.className = 'tag-editor';
-
-        const tags = file.tags || [];
-        editor.innerHTML = tags.map(t => `
-            <span class="tag" data-tag="${escapeHtml(t)}">
-                ${escapeHtml(t)}
-                <span class="remove" data-tag="${escapeHtml(t)}">�</span>
-            </span>
-        `).join('') + '<input type="text" placeholder="Add tag...">';
-
-        cell.innerHTML = '';
-        cell.appendChild(editor);
-
-        const input = editor.querySelector('input');
-        input.focus();
-
-        // Autocomplete
-        const allTags = this.getAllUniqueTags();
-        let autocompleteEl = null;
-
-        const showAutocomplete = (value) => {
-            if (autocompleteEl) {
-                autocompleteEl.remove();
-                autocompleteEl = null;
+    startConsolePolling() {
+        // Single poller for the whole page lifetime; visibility of the
+        // console view is handled by switchView, and pause skips appends.
+        this.pollConsole();
+        this.consoleTimer = setInterval(() => {
+            if (this.currentView === 'console' && !this.consolePaused) {
+                this.pollConsole();
             }
-
-            if (!value) return;
-
-            const matches = allTags.filter(t => t.includes(value.toLowerCase()) && !tags.includes(t)).slice(0, 10);
-            if (matches.length === 0) return;
-
-            autocompleteEl = document.createElement('div');
-            autocompleteEl.className = 'tag-autocomplete';
-            autocompleteEl.innerHTML = matches.map(t => `<div class="tag-autocomplete-item" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('');
-
-            const rect = input.getBoundingClientRect();
-            autocompleteEl.style.position = 'fixed';
-            autocompleteEl.style.left = rect.left + 'px';
-            autocompleteEl.style.top = (rect.bottom + 2) + 'px';
-            autocompleteEl.style.width = rect.width + 'px';
-
-            document.body.appendChild(autocompleteEl);
-
-            autocompleteEl.querySelectorAll('.tag-autocomplete-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    this.addTagToEditor(editor, item.dataset.tag);
-                    input.value = '';
-                    autocompleteEl.remove();
-                    autocompleteEl = null;
-                });
-            });
-        };
-
-        input.addEventListener('input', (e) => {
-            showAutocomplete(e.target.value.toLowerCase());
-        });
-
-        input.addEventListener('keydown', async (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const tag = sanitizeTag(input.value);
-                if (tag) {
-                    await this.addTagToFile(filePath, tag);
-                    this.addTagToEditor(editor, tag);
-                    input.value = '';
-                }
-            } else if (e.key === 'Escape') {
-                if (autocompleteEl) {
-                    autocompleteEl.remove();
-                    autocompleteEl = null;
-                } else {
-                    this.renderFilesView();
-                }
-            }
-        });
-
-        // Remove tags
-        editor.querySelectorAll('.tag .remove').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const tag = btn.dataset.tag;
-                await this.removeTagFromFile(filePath, tag);
-                btn.parentElement.remove();
-            });
-        });
+        }, 3000);
     }
 
-    addTagToEditor(editor, tag) {
-        const existingTags = Array.from(editor.querySelectorAll('.tag')).map(t => t.dataset.tag);
-        if (existingTags.includes(tag)) return;
-
-        const tagSpan = document.createElement('span');
-        tagSpan.className = 'tag';
-        tagSpan.dataset.tag = tag;
-        tagSpan.innerHTML = `${escapeHtml(tag)}<span class="remove" data-tag="${escapeHtml(tag)}">�</span>`;
-
-        tagSpan.querySelector('.remove').addEventListener('click', async () => {
-            const path = editor.closest('tr').dataset.path;
-            await this.removeTagFromFile(path, tag);
-            tagSpan.remove();
-        });
-
-        editor.insertBefore(tagSpan, editor.querySelector('input'));
+    setConsolePaused(paused) {
+        this.consolePaused = paused;
+        const pauseBtn = document.getElementById('console-pause-btn');
+        const resumeBtn = document.getElementById('console-resume-btn');
+        const refreshBtn = document.getElementById('console-refresh-btn');
+        const status = document.getElementById('console-status');
+        if (pauseBtn) pauseBtn.classList.toggle('hidden', paused);
+        if (resumeBtn) resumeBtn.classList.toggle('hidden', !paused);
+        if (refreshBtn) refreshBtn.classList.toggle('hidden', !paused);
+        if (status) status.textContent = paused
+            ? 'Paused — output frozen. Use Refresh Now to fetch manually.'
+            : 'Live — polling every 3s';
     }
 
-    async addTagToFile(filePath, tag) {
-        tag = sanitizeTag(tag);
-        if (!tag) return;
-
-        const file = this.allImageFiles.find(f => f.path === filePath);
-        if (!file) return;
-
-        if (!file.tags) file.tags = [];
-        if (file.tags.includes(tag)) return;
-
-        file.tags.push(tag);
-
-        if (this.isServerMode) {
-            try {
-                await apiService.updateFileTags(filePath, file.tags);
-            } catch (e) {
-                console.error('Failed to update tags:', e);
-            }
-        } else {
-            await db.put(db.stores.FILES, filePath, file);
-        }
-    }
-
-    async removeTagFromFile(filePath, tag) {
-        const file = this.allImageFiles.find(f => f.path === filePath);
-        if (!file || !file.tags) return;
-
-        file.tags = file.tags.filter(t => t !== tag);
-
-        if (this.isServerMode) {
-            try {
-                await apiService.updateFileTags(filePath, file.tags);
-            } catch (e) {
-                console.error('Failed to update tags:', e);
-            }
-        } else {
-            await db.put(db.stores.FILES, filePath, file);
-        }
-    }
-
-    // Batch Operations
-    selectAllFiles() {
-        this.allImageFiles.forEach(f => this.selectedFiles.add(f.path));
-        this.renderFilesView();
-        this.updateBatchBar();
-    }
-
-    selectNone() {
-        this.selectedFiles.clear();
-        this.renderFilesView();
-        this.updateBatchBar();
-    }
-
-    updateBatchBar() {
-        const bar = document.getElementById('batch-bar');
-        const count = document.getElementById('selected-count');
-
-        if (this.selectedFiles.size === 0) {
-            bar.classList.add('hidden');
-        } else {
-            bar.classList.remove('hidden');
-            count.textContent = this.selectedFiles.size;
-        }
-    }
-
-    async batchAddTags() {
-        const tags = prompt('Enter tags to add (space-separated):');
-        if (!tags) return;
-
-        const newTags = tags.split(/\s+/).filter(t => t).map(sanitizeTag);
-
-        if (this.isServerMode) {
-            try {
-                await apiService.bulkUpdateTags(Array.from(this.selectedFiles), { add: newTags });
-                showNotification(`Added tags to ${this.selectedFiles.size} files`, 'success');
-            } catch (e) {
-                showError('Batch Add Tags', e);
-            }
-        }
-
-        // Update local state
-        for (const path of this.selectedFiles) {
-            const file = this.allImageFiles.find(f => f.path === path);
-            if (file) {
-                if (!file.tags) file.tags = [];
-                newTags.forEach(tag => {
-                    if (!file.tags.includes(tag)) file.tags.push(tag);
-                });
-            }
-        }
-
-        this.selectedFiles.clear();
-        this.updateBatchBar();
-        this.renderFilesView();
-    }
-
-    async batchRemoveTags() {
-        const tags = prompt('Enter tags to remove (space-separated):');
-        if (!tags) return;
-
-        const tagsToRemove = tags.split(/\s+/).filter(t => t).map(t => t.toLowerCase());
-
-        if (this.isServerMode) {
-            try {
-                await apiService.bulkUpdateTags(Array.from(this.selectedFiles), { remove: tagsToRemove });
-                showNotification(`Removed tags from ${this.selectedFiles.size} files`, 'success');
-            } catch (e) {
-                showError('Batch Remove Tags', e);
-            }
-        }
-
-        // Update local state
-        for (const path of this.selectedFiles) {
-            const file = this.allImageFiles.find(f => f.path === path);
-            if (file && file.tags) {
-                file.tags = file.tags.filter(t => !tagsToRemove.includes(t.toLowerCase()));
-            }
-        }
-
-        this.selectedFiles.clear();
-        this.updateBatchBar();
-        this.renderFilesView();
-    }
-
-    async batchClearTags() {
-        if (!confirm(`Clear all tags from ${this.selectedFiles.size} files?`)) return;
-
-        if (this.isServerMode) {
-            try {
-                await apiService.bulkUpdateTags(Array.from(this.selectedFiles), { set: [] });
-                showNotification(`Cleared tags from ${this.selectedFiles.size} files`, 'success');
-            } catch (e) {
-                showError('Batch Clear Tags', e);
-            }
-        }
-
-        // Update local state
-        for (const path of this.selectedFiles) {
-            const file = this.allImageFiles.find(f => f.path === path);
-            if (file) file.tags = [];
-        }
-
-        this.selectedFiles.clear();
-        this.updateBatchBar();
-        this.renderFilesView();
-    }
-
-    // Directory Management
-    renderDirsView() {
-        const container = document.getElementById('dirs-list');
-        if (!container) return;
-
-        container.innerHTML = '';
-
-        if (!this.allMangaDirs.length) {
-            container.innerHTML = '<p>No directories found. Scan a directory first.</p>';
-            return;
-        }
-
-        this.allMangaDirs.forEach(dir => {
-            const div = document.createElement('div');
-            div.className = 'dir-item';
-            // Manga dirs are expected to be numbered (skip named extras);
-            // H-Manga dirs commonly have free-form book names that should
-            // each count as one entry. Default to manga when section is
-            // missing ? matches the section default elsewhere in this file.
-            const count = getChapterCount(dir.chapters, {
-                skipNonNumeric: dir.section !== 'h-manga'
-            });
-            div.innerHTML = `
-                <div>
-                    <div class="dir-name">${escapeHtml(dir.name)}</div>
-                    <div class="dir-info">${count} chapters</div>
-                </div>
-                <div class="dir-actions">
-                    <button class="btn-secondary btn-small rescan-btn" data-dir="${escapeHtml(dir.name)}">
-                        Rescan
-                    </button>
-                    <button class="btn-secondary btn-small quick-rescan-btn" data-dir="${escapeHtml(dir.name)}">
-                        Quick Scan
-                    </button>
-                </div>
-            `;
-            container.appendChild(div);
-        });
-
-        container.querySelectorAll('.rescan-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.rescanDirectory(btn.dataset.dir, false));
-        });
-
-        container.querySelectorAll('.quick-rescan-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.rescanDirectory(btn.dataset.dir, true));
-        });
-    }
-
-    async rescanDirectory(folder, quick) {
+    pollConsole(force = false) {
+        const out = document.getElementById('console-output');
+        if (!out) return;
         if (!this.isServerMode) {
-            showNotification('Rescan only available in server mode', 'warning');
+            out.textContent = 'Console output is only available when the app runs in server mode.';
             return;
         }
-
-        try {
-            // Find section for this folder
-            let section = 'manga';
-            for (const dir of this.allMangaDirs) {
-                if (dir.name === folder) {
-                    section = dir.section || 'manga';
-                    break;
+        // While paused, only an explicit Refresh Now (force) fetches — and it
+        // re-reads the SAME range without advancing the cursor, so the next
+        // live poll resumes exactly where the pause left off.
+        if (this.consolePaused && !force) return;
+        // Live polls advance the cursor; a forced paused fetch does not (it
+        // re-reads the same range for display only).
+        const shouldAdvance = !this.consolePaused;
+        fetch(`/api/logs?after=${this.consoleCursor}&limit=1000`, { signal: AbortSignal.timeout(5000) })
+            .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+            .then(({ lines, cursor }) => {
+                if (this.consolePaused && !force) return;
+                if (!lines || lines.length === 0) {
+                    if (force) this.setConsoleStatus(`Fetched — no new lines (cursor ${this.consoleCursor}).`);
+                    return;
                 }
-            }
-
-            showNotification(`${quick ? 'Quick' : 'Full'} rescan started for ${folder}...`, 'info');
-            await apiService.rescanDirectory(section, folder, { quick });
-
-            // Poll for completion (simplified)
-            setTimeout(async () => {
-                await this.loadFromServer();
-                showNotification(`Rescan complete for ${folder}`, 'success');
-            }, 2000);
-        } catch (e) {
-            showError('Rescan Directory', e);
-        }
+                // First load or cleared view: replace content; otherwise append.
+                const firstLoad = this.consoleCursor === 0;
+                if (firstLoad) out.textContent = '';
+                out.appendChild(document.createTextNode(lines.join('\n') + '\n'));
+                if (shouldAdvance) this.consoleCursor = cursor;
+                if (document.getElementById('console-autoscroll')?.checked || firstLoad) {
+                    out.scrollTop = out.scrollHeight;
+                }
+                if (force && this.consolePaused) {
+                    this.setConsoleStatus(`Fetched ${lines.length} line(s) — cursor NOT advanced (still ${this.consoleCursor}); live tail will skip these.`);
+                }
+            })
+            .catch(e => this.setConsoleStatus(`Console fetch failed: ${e.message}`));
     }
 
+    setConsoleStatus(text) {
+        const el = document.getElementById('console-status');
+        if (el) el.textContent = text;
+    }
+
+    clearConsoleView() {
+        const out = document.getElementById('console-output');
+        if (out) out.innerHTML = '<span class="text-secondary">View cleared — live tail continues below.</span>\n';
+    }
+
+    // File Management
     // Tag Browser
     renderTagStats() {
         const grid = document.getElementById('tag-stats-grid');
@@ -1254,7 +864,7 @@ class TagManagementApp {
         configState.excludedTags.forEach(tag => {
             const span = document.createElement('span');
             span.className = 'excluded-tag';
-            span.innerHTML = `${escapeHtml(tag)} <button class="remove-btn" data-tag="${escapeHtml(tag)}">�</button>`;
+            span.innerHTML = `${escapeHtml(tag)} <button class="remove-btn" data-tag="${escapeHtml(tag)}">×</button>`;
             container.appendChild(span);
         });
 

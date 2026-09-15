@@ -4864,6 +4864,126 @@ type ServerMetrics struct {
 var metrics *ServerMetrics
 var startTime time.Time
 
+// ============================================================
+// Log Ring Buffer (Console view data source)
+// ============================================================
+
+// logRing is a thread-safe io.Writer that tees log output into a fixed-size
+// in-memory ring of recent lines. It wraps the real log destination (file,
+// tray buffer, or stderr) so GET /api/logs can serve the last N lines of
+// server output regardless of the logging mode in effect.
+type logRing struct {
+	mu    sync.Mutex
+	buf   []byte    // partial line being accumulated
+	lines [][]byte  // completed lines, oldest first
+	next  int       // next write slot when full
+	full  bool      // whether the ring has wrapped
+	inner io.Writer // the real destination (file/buffer), nil for none
+}
+
+const logRingCapacity = 1000
+
+var _logRing = &logRing{lines: make([][]byte, 0, logRingCapacity)}
+
+// setLogRingInner sets the real destination the ring forwards to. Called
+// whenever the mode-specific log redirection changes (daemon file, tray
+// buffered writer, or default stderr).
+func setLogRingInner(w io.Writer) {
+	_logRing.mu.Lock()
+	_logRing.inner = w
+	_logRing.mu.Unlock()
+}
+
+// setLogRingOutput is the one-stop helper: swap the ring's inner writer AND
+// install the ring as the log output. Used at every log.SetOutput site.
+func setLogRingOutput(w io.Writer) {
+	setLogRingInner(w)
+	log.SetOutput(_logRing)
+}
+
+func (r *logRing) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Forward to the real destination first so file/console output stays
+	// byte-identical to a non-ringed run.
+	if r.inner != nil {
+		_, _ = r.inner.Write(p)
+	}
+
+	// Accumulate into lines, splitting on newlines. A partial trailing line
+	// stays in r.buf until its newline arrives (log lines are \n-terminated).
+	r.buf = append(r.buf, p...)
+	for {
+		idx := bytes.IndexByte(r.buf, '\n')
+		if idx < 0 {
+			break
+		}
+		line := make([]byte, idx)
+		copy(line, r.buf[:idx])
+		r.buf = r.buf[idx+1:]
+		if len(r.lines) < logRingCapacity {
+			r.lines = append(r.lines, line)
+		} else {
+			r.lines[r.next] = line
+			r.next = (r.next + 1) % logRingCapacity
+			r.full = true
+		}
+	}
+	// Guard against runaway partial lines (no newline ever arriving): cap the
+	// buffer and flush it as a line anyway.
+	if len(r.buf) > 64*1024 {
+		line := make([]byte, len(r.buf))
+		copy(line, r.buf)
+		r.buf = r.buf[:0]
+		if len(r.lines) < logRingCapacity {
+			r.lines = append(r.lines, line)
+		} else {
+			r.lines[r.next] = line
+			r.next = (r.next + 1) % logRingCapacity
+			r.full = true
+		}
+	}
+	return len(p), nil
+}
+
+// logRingSnapshot returns up to limit most-recent lines. When afterSeq > 0,
+// only lines newer than the given sequence number are returned (polling
+// cursor), along with the newest sequence number for the next poll.
+func logRingSnapshot(afterSeq int, limit int) (lines []string, newest int) {
+	_logRing.mu.Lock()
+	defer _logRing.mu.Unlock()
+
+	total := len(_logRing.lines)
+	if total == 0 {
+		return nil, afterSeq
+	}
+	// Sequence numbers: line i (0-based, oldest→newest order in the ring) has
+	// seq = i+1 counting from process start; when wrapped, oldest is at next.
+	type ringLine struct {
+		text string
+		seq  int
+	}
+	all := make([]ringLine, 0, total)
+	for i := 0; i < total; i++ {
+		idx := i
+		if _logRing.full {
+			idx = (_logRing.next + i) % total
+		}
+		all = append(all, ringLine{string(_logRing.lines[idx]), i + 1})
+	}
+	if limit > 0 && len(all) > limit {
+		all = all[len(all)-limit:]
+	}
+	out := make([]string, 0, len(all))
+	for _, l := range all {
+		if l.seq > afterSeq {
+			out = append(out, l.text)
+		}
+	}
+	return out, all[len(all)-1].seq
+}
+
 func NewServerMetrics() *ServerMetrics {
 	return &ServerMetrics{
 		startTime: time.Now(),
@@ -5538,6 +5658,13 @@ func ScanImages(ctx context.Context, dir string, db *InMemoryDB, section string)
 		return nil
 	})
 
+	// Snapshot the pre-scan path set so the splice below can report which
+	// files are NEW (Console view / log tail feeds on these lines).
+	prevPaths := make(map[string]bool)
+	for _, f := range db.GetFilesBySection(section) {
+		prevPaths[f.Path] = true
+	}
+
 	// Atomically replace the section's file set with the discovered files
 	// under a single write-lock acquisition. ClearAndSaveFiles tears down the
 	// old entries (tag associations, hash indexes) and rebuilds from
@@ -5550,6 +5677,25 @@ func ScanImages(ctx context.Context, dir string, db *InMemoryDB, section string)
 	// reader-starvation window stays short.
 	if len(collected) > 0 {
 		db.ClearAndSaveFiles(section, collected)
+		// Report newly discovered files (present now, absent before). Cap the
+		// per-file listing so a first boot over a huge library doesn't flood
+		// the Console view — the total line carries the aggregate.
+		var added []string
+		for _, f := range collected {
+			if !prevPaths[f.Path] {
+				added = append(added, f.Path)
+			}
+		}
+		if len(added) > 0 {
+			const maxListed = 20
+			for i, p := range added {
+				if i >= maxListed {
+					log.Printf("[DISCOVERY] %s: %d new files total (%d more not listed)", section, len(added), len(added)-maxListed)
+					break
+				}
+				log.Printf("[DISCOVERY] New file in %s: %s", section, p)
+			}
+		}
 	} else {
 		// No files discovered: still clear so the section reflects an empty
 		// library rather than stale entries. ClearSection is fine here
@@ -6048,6 +6194,13 @@ func main() {
 	noTray := flag.Bool("notray", false, "Disable system tray icon (run as console app)")
 	flag.Parse()
 
+	// Capture all log output into a ring buffer for the tag-management
+	// Console view (GET /api/logs). Installed before any mode-specific log
+	// redirection so it captures daemon/tray/console output alike: the ring
+	// forwards to whichever destination each mode installs via
+	// setLogRingOutput (console mode forwards to stderr).
+	setLogRingOutput(os.Stderr)
+
 	// Handle daemon mode
 	if *daemon {
 		if *logfile == "" {
@@ -6063,8 +6216,9 @@ func main() {
 		}
 		defer f.Close()
 
-		// Redirect stdout and stderr to log file
-		log.SetOutput(f)
+		// Redirect stdout and stderr to log file. The ring stays installed as
+		// the log output; the file becomes its forwarding target.
+		setLogRingOutput(f)
 		os.Stdout = f
 		os.Stderr = f
 
@@ -6095,7 +6249,7 @@ func main() {
 			// underlying writer is swappable so showConsoleWindow can attach the
 			// on-demand console (via MultiWriter) while keeping the buffer.
 			trayLogWriter = newSyncBufferedWriter(f, 8*1024)
-			log.SetOutput(trayLogWriter)
+			setLogRingOutput(trayLogWriter)
 			// os.Stdout/Stderr remain the raw file for non-log writes (rare, e.g.
 			// direct fmt.Fprintf(os.Stdout,...)). gin's per-request logger is
 			// routed through the buffer explicitly in the router setup below via
@@ -6676,6 +6830,19 @@ func main() {
 		// Metrics endpoint
 		api.GET("/metrics", func(c *gin.Context) {
 			c.JSON(200, metrics.GetStats())
+		})
+
+		// Recent server log lines for the tag-management Console view.
+		// Query params: after=<seq> to fetch only newer lines (poll cursor,
+		// 0 = everything), limit=<n> to cap the response (default 500).
+		api.GET("/logs", func(c *gin.Context) {
+			after, _ := strconv.Atoi(c.DefaultQuery("after", "0"))
+			limit, _ := strconv.Atoi(c.DefaultQuery("limit", "500"))
+			if limit < 1 || limit > logRingCapacity {
+				limit = logRingCapacity
+			}
+			lines, newest := logRingSnapshot(after, limit)
+			c.JSON(200, gin.H{"lines": lines, "cursor": newest})
 		})
 
 		// Scan - synchronous, returns results
