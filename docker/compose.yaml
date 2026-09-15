@@ -41,6 +41,12 @@ services:
       # - MV_IMAGES_DIR=/media/images
       # - MV_MANGA_DIR=/media/manga
       # - MV_HMANGA_DIR=/media/h-manga
+      # Scan timeout for image sections — raise for large CIFS/NFS libraries
+      # (default 300s = 5 min):
+      # - MV_SCAN_TIMEOUT_SEC=7200
+      # Extra CORS origins for LAN clients (plain http + private IPv4 only;
+      # comma-separated, e.g. ALLOWED_ORIGINS=http://192.168.1.10:3000):
+      # - ALLOWED_ORIGINS=
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 30s
@@ -65,6 +71,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      # Watchtower 1.7.x bundles a Docker client speaking API 1.25, which
+      # Docker 29.x servers reject (min 1.40) -> crash loop. Pin the API
+      # version explicitly.
+      - DOCKER_API_VERSION=1.44
       - WATCHTOWER_SCHEDULE=0 0 4 * * *
       - WATCHTOWER_LABEL_ENABLE=true
       - WATCHTOWER_CLEANUP=true

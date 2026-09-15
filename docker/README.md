@@ -255,6 +255,9 @@ Log rotation is configured in compose (`json-file`, max 10 MB × 3).
 | Symptom | Cause | Fix |
 |---|---|---|
 | `[FFMPEG] ... not found` in logs / no video thumbs | ffmpeg missing | image bundles `ffmpeg` — check `docker exec media-viewer ffmpeg -version`; a custom build must not drop it |
+| `[THUMB GEN ERROR] ... open /app/.thumbnails/...: no such file or directory` / `generated: 0` forever | `thumbnail_dir` from the config file ignored (fixed in main.go mergeConfig; affects images built before the fix) | update the image; permanent workaround: mount a writable volume at `/app/.thumbnails` and `chown 1000:1000` it |
+| `[CORS WARNING] Rejecting unsafe origin: http://<lan-ip>:3000` and every API call 403s | LAN http origin not in `ALLOWED_ORIGINS`, or image predates the private-IP CORS fix | set `ALLOWED_ORIGINS=http://<lan-ip>:3000` (plain http is accepted for private IPv4 hosts; public http/wildcards stay rejected) |
+| `[STARTUP ERROR] Failed to scan images: context deadline exceeded` | 5-min default scan timeout too small for the library over CIFS/NFS | set `MV_SCAN_TIMEOUT_SEC=7200` (compose example) or lower `rescan_interval_sec` |
 | `permission denied` writing `.thumbnails`/`index` | volume dir not owned by uid 1000 | `chown -R 1000:1000` the volume path (bind-path volumes only) |
 | Media not appearing | share not mounted, or scanned before mount | verify `docker exec media-viewer ls /media/...`; rescan runs every `rescan_interval_sec`; restart container after mounting |
 | Startup `[SCAN ERROR] Cannot access directory /media/...` | mount absent at boot | same as above — rescan covers transient absence |
@@ -272,6 +275,8 @@ Log rotation is configured in compose (`json-file`, max 10 MB × 3).
 | `min_write_rate_bytes` (512000) | 500 KB/s | lower for slow client links |
 | `thumbnail_workers` (5) | 5 | raise on 4+ vCPU hosts |
 | `trusted_proxies` | loopback only | add reverse-proxy IP when TLS-terminating in front |
+| `MV_SCAN_TIMEOUT_SEC` (300) | 5 min per image-section scan | raise (e.g. 7200) for large libraries on CIFS/NFS |
+| `ALLOWED_ORIGINS` | unset (localhost only) | add LAN origins (http + private IPv4) or https origins; comma-separated |
 
 ## 9. Out of scope / future work
 

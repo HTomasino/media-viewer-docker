@@ -1,4 +1,4 @@
-﻿// Media Viewer Server - Complete Go Implementation with Security & Performance
+// Media Viewer Server - Complete Go Implementation with Security & Performance
 // Build (console app):      go build -ldflags "-s -w" -o media-server.exe .
 // Build (Windows tray mode): go build -ldflags "-s -w -H windowsgui" -o media-server.exe .
 //   The -H windowsgui build has no console window â€” the app runs in the system
@@ -296,6 +296,20 @@ func debugLog(format string, v ...interface{}) {
 	if debugMode.Load() {
 		log.Printf("[DEBUG] "+format, v...)
 	}
+}
+
+// scanTimeoutDuration returns the per-scan context timeout. Scanning a large
+// media library over CIFS/NFS can take far longer than the 5-minute default,
+// so deployments can raise it via MV_SCAN_TIMEOUT_SEC (seconds, 0 = default).
+// All image-scan call sites (startup, fallback, rescan, incremental, API)
+// share this value.
+func scanTimeoutDuration() time.Duration {
+	if v := os.Getenv("MV_SCAN_TIMEOUT_SEC"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 5 * time.Minute
 }
 
 func DefaultConfig() *Config {
@@ -1066,7 +1080,7 @@ func verifyImagesSection(cfg *Config, db *InMemoryDB, section, dir string) bool 
 	// Walk disk to find files not in the DB. We defer the actual insert to
 	// after rename matching so a renamed file's existing DB entry can be
 	// updated in place rather than deleted+reinserted.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), scanTimeoutDuration())
 	defer cancel()
 	type addedCandidate struct {
 		rel       string
@@ -2470,7 +2484,7 @@ func rescanSection(cfg *Config, section, dir string, db *InMemoryDB) {
 	start := time.Now()
 	switch section {
 	case SectionImages:
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), scanTimeoutDuration())
 		defer cancel()
 		if err := ScanImages(ctx, dir, db, section); err != nil {
 			log.Printf("[RESCAN ERROR] Failed to rescan %s: %v", section, err)
@@ -5169,7 +5183,9 @@ func SetupCORS(cfg *Config) gin.HandlerFunc {
 }
 
 // isValidOrigin validates that an origin is safe to add to CORS
-// Only allows localhost/127.0.0.1 or HTTPS URLs
+// Only allows localhost/127.0.0.1, HTTPS URLs, or plain-http origins whose
+// host is a private (RFC1918) IPv4 address — the LAN-trust deployment target.
+// Wildcards and public http origins remain rejected.
 func isValidOrigin(origin string) bool {
 	// Must start with http:// or https://
 	if !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
@@ -5182,6 +5198,19 @@ func isValidOrigin(origin string) bool {
 		strings.HasPrefix(origin, "https://localhost:") ||
 		strings.HasPrefix(origin, "https://127.0.0.1:") {
 		return true
+	}
+
+	// Private LAN IPs are acceptable over plain http: these origins are only
+	// ever added when the admin EXPLICITLY lists them in ALLOWED_ORIGINS, and
+	// home-server deployments (this project's target) serve LAN clients over
+	// http. Anything not matching here must be https below.
+	if strings.HasPrefix(origin, "http://") {
+		host := strings.SplitN(strings.TrimPrefix(origin, "http://"), ":", 2)[0]
+		host = strings.SplitN(host, "/", 2)[0] // strip trailing path, if any
+		if ip := net.ParseIP(host); ip != nil && ip.IsPrivate() {
+			return true
+		}
+		return false
 	}
 
 	// Only allow HTTPS for non-local origins
@@ -5900,6 +5929,10 @@ func mergeConfig(baseCfg *Config, fileCfg *rawFileConfig) {
 		baseCfg.RescanIntervalSec = fileCfg.RescanIntervalSec
 		log.Printf("[CONFIG] RescanIntervalSec from file: %d", fileCfg.RescanIntervalSec)
 	}
+	if fileCfg.ThumbnailDir != "" {
+		baseCfg.ThumbnailDir = fileCfg.ThumbnailDir
+		log.Printf("[CONFIG] ThumbnailDir from file: %s", fileCfg.ThumbnailDir)
+	}
 	if fileCfg.IndexPath != "" {
 		baseCfg.IndexPath = fileCfg.IndexPath
 		log.Printf("[CONFIG] IndexPath from file: %s", fileCfg.IndexPath)
@@ -6350,7 +6383,7 @@ func main() {
 					start := time.Now()
 					switch sec {
 					case SectionImages:
-						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+						ctx, cancel := context.WithTimeout(context.Background(), scanTimeoutDuration())
 						defer cancel()
 						if err := ScanImages(ctx, d, db, sec); err != nil {
 							log.Printf("[STARTUP ERROR] Failed to scan %s: %v", sec, err)
@@ -6425,7 +6458,7 @@ func main() {
 					start := time.Now()
 					switch sec {
 					case SectionImages:
-						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+						ctx, cancel := context.WithTimeout(context.Background(), scanTimeoutDuration())
 						defer cancel()
 						if err := ScanImages(ctx, d, db, sec); err != nil {
 							log.Printf("[STARTUP ERROR] Failed to scan %s: %v", sec, err)
@@ -6684,7 +6717,7 @@ func main() {
 			case SectionImages:
 				func() {
 					// API scan uses longer timeout since it can take time for large directories
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+					ctx, cancel := context.WithTimeout(context.Background(), scanTimeoutDuration())
 					defer cancel()
 					scanErr = ScanImages(ctx, dir, db, section)
 					if scanErr != nil {
