@@ -32,8 +32,10 @@
   "index_path": "/app/data/index",
   "index_on_startup": "always",
   "gotify": {
+    "_comment": "Bundled-server mode (spawning a child) is Windows-only. In Docker, either leave enabled=false, or run a gotify/server container (see compose.yaml) and set: enabled=true, server_url=http://gotify:8080, admin_user/admin_pass matching that container's env, app_token empty (auto-created and persisted here). data_dir is only used for the notified-chapters tracker in external mode — keep it on the /app/data volume.",
     "enabled": false,
-    "binary_path": "/app/tools/gotify-server",
+    "server_url": "http://gotify:8080",
+    "binary_path": "",
     "port": 8180,
     "admin_user": "admin",
     "admin_pass": "change-me",

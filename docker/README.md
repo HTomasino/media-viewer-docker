@@ -113,9 +113,15 @@ decisions already baked in:
 - `mode: release` — no gin debug spam.
 - `index_path: /app/data/index`, `thumbnail_dir: /app/data/.thumbnails` —
   both live on the `media-data` volume.
-- `gotify.enabled: false` — the bundled gotify binary is a Windows `.exe` and
-  cannot run in the Linux image. To get push notifications later, run gotify
-  as its own container and point the config at it (documented as future work).
+- `gotify.enabled: false` — the bundled gotify child process is Windows-only
+  (the official Linux release binary is glibc-linked and cannot run in the
+  musl media-viewer image). For push notifications in Docker: uncomment the
+  `gotify` sidecar service in compose, then set in `config.docker.json`:
+  `gotify.enabled: true`, `server_url: "http://gotify:8080"`, matching
+  `admin_user`/`admin_pass`, `app_token: ""` (the app token is created
+  automatically via admin credentials and persisted back into the config).
+  `data_dir` must stay on the `/app/data` volume (it holds the
+  notified-chapters tracker).
 - The `MV_*_DIR` env vars (`MV_IMAGES_DIR`, `MV_MANGA_DIR`, `MV_HMANGA_DIR`)
   override `directories` if you prefer not to edit the config file.
 - There is **no `first_byte_grace_sec` field** — the write-rate middleware
@@ -255,6 +261,9 @@ Log rotation is configured in compose (`json-file`, max 10 MB × 3).
 | Symptom | Cause | Fix |
 |---|---|---|
 | `[FFMPEG] ... not found` in logs / no video thumbs | ffmpeg missing | image bundles `ffmpeg` — check `docker exec media-viewer ffmpeg -version`; a custom build must not drop it |
+| `[GOTIFY] Failed to start: gotify binary not found at /app/tools/gotify-server.exe` | bundled-child mode attempted on Linux | use external mode: gotify sidecar (compose) + `server_url` in config (see §3); bundled spawn is Windows-only |
+| Gotify `enabled: true, running: false` forever | same as above | same fix |
+| `[GOTIFY] ... 401/403` on every send after moving servers | app token belongs to the old gotify database | external mode validates the token on start and re-creates it via admin creds automatically; or POST `/api/gotify/reset` |
 | `[THUMB GEN ERROR] ... open /app/.thumbnails/...: no such file or directory` / `generated: 0` forever | `thumbnail_dir` from the config file ignored (fixed in main.go mergeConfig; affects images built before the fix) | update the image; permanent workaround: mount a writable volume at `/app/.thumbnails` and `chown 1000:1000` it |
 | `[CORS WARNING] Rejecting unsafe origin: http://<lan-ip>:3000` and every API call 403s | LAN http origin not in `ALLOWED_ORIGINS`, or image predates the private-IP CORS fix | set `ALLOWED_ORIGINS=http://<lan-ip>:3000` (plain http is accepted for private IPv4 hosts; public http/wildcards stay rejected) |
 | `[STARTUP ERROR] Failed to scan images: context deadline exceeded` | 5-min default scan timeout too small for the library over CIFS/NFS | set `MV_SCAN_TIMEOUT_SEC=7200` (compose example) or lower `rescan_interval_sec` |
@@ -281,5 +290,6 @@ Log rotation is configured in compose (`json-file`, max 10 MB × 3).
 ## 9. Out of scope / future work
 
 - CI/CD image builds (manual `docker build` + registry push; watchtower pulls tags)
-- Native gotify sidecar container (notifications parity) — document as future work
 - Docker secrets / env templating for tokens (bind-mounted config file suffices)
+- In-process gotify on Linux (needs a musl-linked gotify build or a
+  debian-based runtime image; external sidecar mode covers the need)

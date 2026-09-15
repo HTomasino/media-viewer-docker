@@ -32,7 +32,8 @@ services:
       - /mnt/pve/media/images:/media/images:ro
       - /mnt/pve/media/manga:/media/manga:ro
       - /mnt/pve/media/h-manga:/media/h-manga:ro
-      # Thumbnails + index + (optionally) gotify data — survives updates
+      # Thumbnails + index (+ notified-chapters tracker if gotify external
+      # mode is used) — survives updates
       - media-data:/app/data
     environment:
       # TZ + tzdata in the image -> correct mtime display in the UI
@@ -58,6 +59,28 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Optional: external Gotify server for push notifications. The bundled
+  # gotify child process is Windows-only (the official Linux release binary
+  # is glibc-linked and cannot run in the musl media-viewer image), so
+  # container deployments run gotify separately and point the media-viewer
+  # config at it via gotify.server_url. Uncomment to use, and set in
+  # config.docker.json: gotify.enabled=true, server_url=http://gotify:8080.
+  # gotify:
+  #   image: gotify/server
+  #   container_name: media-viewer-gotify
+  #   restart: unless-stopped
+  #   environment:
+  #     - GOTIFY_DEFAULTUSER_NAME=admin
+  #     - GOTIFY_DEFAULTUSER_PASS=change-me
+  #     - GOTIFY_REGISTRATION=false
+  #   volumes:
+  #     - gotify-data:/app/data
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
 
   # Unattended image updates. Watches daily at 04:00 and recreates ONLY
   # containers labeled com.centurylinklabs.watchtower.enable=true.
@@ -91,3 +114,5 @@ services:
 
 volumes:
   media-data:
+  # Uncomment when enabling the gotify sidecar:
+  # gotify-data:

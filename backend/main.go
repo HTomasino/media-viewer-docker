@@ -5816,6 +5816,7 @@ type rawFileConfig struct {
 // rawGotifyConfig mirrors GotifyConfig with a *bool for Enabled.
 type rawGotifyConfig struct {
 	Enabled         *bool  `json:"enabled"`
+	ServerURL       string `json:"server_url"`
 	BinaryPath      string `json:"binary_path"`
 	Port            int    `json:"port"`
 	AdminUser       string `json:"admin_user"`
@@ -5944,6 +5945,10 @@ func mergeConfig(baseCfg *Config, fileCfg *rawFileConfig) {
 	if fileCfg.Gotify.Enabled != nil {
 		baseCfg.Gotify.Enabled = *fileCfg.Gotify.Enabled
 		log.Printf("[CONFIG] Gotify.Enabled from file: %v", *fileCfg.Gotify.Enabled)
+	}
+	if fileCfg.Gotify.ServerURL != "" {
+		baseCfg.Gotify.ServerURL = fileCfg.Gotify.ServerURL
+		log.Printf("[CONFIG] Gotify.ServerURL from file: %s", fileCfg.Gotify.ServerURL)
 	}
 	if fileCfg.Gotify.BinaryPath != "" {
 		baseCfg.Gotify.BinaryPath = fileCfg.Gotify.BinaryPath

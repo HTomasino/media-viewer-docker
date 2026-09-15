@@ -19,7 +19,13 @@ import (
 )
 
 type GotifyConfig struct {
-	Enabled         bool   `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	// ServerURL, when set, points at an EXTERNAL gotify server (e.g. its own
+	// container) — the notifier then never spawns a bundled server child.
+	// Empty = spawn the bundled binary (Windows-only deployment; the bundled
+	// binary is a Windows .exe and the official Linux release is glibc-linked,
+	// so it can't run inside the musl media-viewer image).
+	ServerURL       string `json:"server_url,omitempty"`
 	BinaryPath      string `json:"binary_path"`
 	Port            int    `json:"port"`
 	AdminUser       string `json:"admin_user"`
@@ -108,9 +114,59 @@ func (n *GotifyNotifier) Start() error {
 		return nil
 	}
 
+	// External-server mode: never spawn a child. Health-check the configured
+	// URL, then resolve the app token exactly like the bundled flow does.
+	if n.config.ServerURL != "" {
+		url := strings.TrimRight(n.config.ServerURL, "/")
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			return fmt.Errorf("gotify server_url must start with http:// or https://: %s", url)
+		}
+		n.baseURL = url
+		log.Printf("[GOTIFY] External server mode: %s", url)
+		if err := n.healthCheck(); err != nil {
+			return fmt.Errorf("external gotify server unreachable: %w", err)
+		}
+		if n.config.AppToken == "" {
+			token, err := n.createApp()
+			if err != nil {
+				return fmt.Errorf("could not create app on external gotify (check admin_user/admin_pass): %w", err)
+			}
+			n.appToken = token
+			n.config.AppToken = token
+			log.Printf("[GOTIFY] Created app token on external server: %s — persisting to config", token)
+			if currentConfig != nil {
+				currentConfig.Gotify.AppToken = token
+				if err := saveConfig(); err != nil {
+					log.Printf("[GOTIFY] Warning: failed to save app token to config: %v — token is in-memory only", err)
+				}
+			}
+		} else {
+			// Configured token: no side-effect-free validation route exists
+			// (app tokens only authenticate /message, and probing it creates
+			// a message). Validate lazily — sendNotification detects a
+			// 401/403 (stale token: fresh server or wiped data dir) and
+			// re-creates the app via admin credentials once, in-band.
+			n.appToken = n.config.AppToken
+			log.Printf("[GOTIFY] Using configured app token")
+		}
+		atomic.StoreUint32(&n.ready, 1)
+		return nil
+	}
+
 	binaryPath := n.config.BinaryPath
 	if binaryPath == "" {
 		binaryPath = "./tools/gotify-server.exe"
+	}
+	// Bundled-child mode is Windows-only: the official gotify release binary
+	// for Linux is glibc-linked and cannot run inside the musl-based container
+	// image, and there is no Linux download in the dependency list. On Linux,
+	// deployments must use external-server mode (gotify.server_url) with a
+	// separate gotify container. Fail here with an actionable message instead
+	// of the confusing exec error later.
+	if runtime.GOOS != "windows" {
+		return fmt.Errorf(
+			"bundled gotify child process is not supported on %s — set gotify.server_url in config to point at an external gotify server (e.g. its own container)",
+			runtime.GOOS)
 	}
 
 	absPath, err := filepath.Abs(binaryPath)
@@ -242,7 +298,10 @@ func (n *GotifyNotifier) Start() error {
 
 func (n *GotifyNotifier) UpdateConfig(cfg GotifyConfig) {
 	n.config = cfg
-	if cfg.Port != 0 {
+	// External mode: honor a changed server_url.
+	if cfg.ServerURL != "" {
+		n.baseURL = strings.TrimRight(cfg.ServerURL, "/")
+	} else if cfg.Port != 0 {
 		n.baseURL = fmt.Sprintf("http://localhost:%d", cfg.Port)
 	}
 	// If the data dir changed, recompute the notified-chapters path and reload
@@ -261,6 +320,11 @@ func (n *GotifyNotifier) UpdateConfig(cfg GotifyConfig) {
 // Start()'s failure path, which runs in the same goroutine that holds
 // startDone — calling Stop() there would self-deadlock on startDone.Wait()).
 func (n *GotifyNotifier) stopChild() {
+	// External-server mode: nothing to stop (no child process was spawned).
+	if n.config.ServerURL != "" {
+		atomic.StoreUint32(&n.ready, 0)
+		return
+	}
 	// Snapshot the cmd under the lock, then signal/wait outside the lock so a
 	// long Wait() doesn't block concurrent readers of n.cmd.
 	n.cmdMu.Lock()
@@ -329,10 +393,20 @@ func (n *GotifyNotifier) healthCheck() error {
 				return nil
 			}
 		}
+		// External servers are usually already up — fail fast instead of
+		// waiting the full 30s retry window when the URL is simply wrong.
+		if n.config.ServerURL != "" && i == 0 && err != nil {
+			break
+		}
 		time.Sleep(1 * time.Second)
 	}
-	return fmt.Errorf("gotify did not become ready after %d seconds", maxAttempts)
+	return fmt.Errorf("gotify did not become ready at %s after %d attempts", n.baseURL, maxAttempts)
 }
+
+// validateAppToken is intentionally NOT implemented: gotify app tokens only
+// authenticate the side-effectful /message route (POST), so there is no
+// probe route. Stale tokens are detected by postMessage's 401/403 and
+// recovered in-band by sendNotification's re-create-and-retry path.
 
 func (n *GotifyNotifier) createApp() (string, error) {
 	adminUser := n.config.AdminUser
@@ -520,8 +594,56 @@ func (n *GotifyNotifier) NotifyArchiveBatch(artist, section string, archives []s
 }
 
 func (n *GotifyNotifier) sendNotification(title, message string, priority int) error {
+	_, err := n.postMessage(title, message, priority)
+	// 401/403 with a configured token means the token is stale (fresh server
+	// or wiped data dir — report #4's silent-401 trap). Re-create the app via
+	// admin credentials and retry once, in-band. Guarded by a flag so a
+	// persistently broken setup can't loop: each send attempt re-creates at
+	// most one app.
+	if err == nil {
+		return nil
+	}
+	if n.config.ServerURL != "" && n.adminRecreateEnabled() && isAuthFailure(err) {
+		log.Printf("[GOTIFY] Token rejected by external server (%v) — recreating app via admin credentials", err)
+		token, createErr := n.createApp()
+		if createErr != nil {
+			return fmt.Errorf("token invalid and app re-create failed: %w", createErr)
+		}
+		n.appToken = token
+		n.config.AppToken = token
+		log.Printf("[GOTIFY] Created replacement app token: %s — persisting to config", token)
+		if currentConfig != nil {
+			currentConfig.Gotify.AppToken = token
+			if err := saveConfig(); err != nil {
+				log.Printf("[GOTIFY] Warning: failed to save app token to config: %v — token is in-memory only and will be lost on restart", err)
+			}
+		}
+		// Retry the original send once with the fresh token.
+		_, err = n.postMessage(title, message, priority)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return err
+}
+
+// adminRecreateEnabled reports whether auto-recreation is possible: it needs
+// admin credentials (always configured in practice) and external mode (for
+// the bundled server the token lifecycle is already self-healing via reset).
+func (n *GotifyNotifier) adminRecreateEnabled() bool {
+	return n.config.ServerURL != "" && (n.config.AdminUser != "" || n.config.AdminPass != "")
+}
+
+// isAuthFailure reports whether a postMessage error is an auth rejection
+// (stale/unknown app token) rather than a network/serialization error.
+func isAuthFailure(err error) bool {
+	return strings.Contains(err.Error(), "status 401") || strings.Contains(err.Error(), "status 403")
+}
+
+func (n *GotifyNotifier) postMessage(title, message string, priority int) (map[string]interface{}, error) {
 	if n.appToken == "" {
-		return fmt.Errorf("no app token configured")
+		return nil, fmt.Errorf("no app token configured")
 	}
 
 	if priority == 0 {
@@ -540,13 +662,13 @@ func (n *GotifyNotifier) sendNotification(title, message string, priority int) e
 	}
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("marshal notification: %w", err)
+		return nil, fmt.Errorf("marshal notification: %w", err)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("POST", n.baseURL+"/message?token="+n.appToken, bytes.NewReader(jsonBody))
 	if err != nil {
-		return fmt.Errorf("create notification request: %w", err)
+		return nil, fmt.Errorf("create notification request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -554,14 +676,14 @@ func (n *GotifyNotifier) sendNotification(title, message string, priority int) e
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send notification request: %w", err)
+		return nil, fmt.Errorf("send notification request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("notification rejected (status %d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("notification rejected (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	// Parse Gotify response to confirm the push was accepted with the correct priority
@@ -574,7 +696,7 @@ func (n *GotifyNotifier) sendNotification(title, message string, priority int) e
 		log.Printf("[GOTIFY] Push accepted (status 200) but could not parse response: %s", string(respBody))
 	}
 
-	return nil
+	return result, nil
 }
 
 func getMangaChapterSnapshot(db *InMemoryDB, section string) map[string][]string {
