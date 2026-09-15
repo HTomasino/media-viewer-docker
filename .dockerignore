@@ -1,0 +1,38 @@
+# Media Viewer — Docker build context exclusions
+# Context is the repo root (Dockerfile needs backend/ + Deployable/web only).
+# Everything else is either runtime state, binaries, or unrelated trees.
+
+# Runtime state — never goes into the image
+# (**/ prefix: match at any depth — backend/, Deployable/, etc.)
+**/.thumbnails/
+**/index/
+**/gotify-data/
+**/*.log
+**/*.log.*
+
+# Binaries and build artifacts
+**/*.exe
+EOF
+
+# Media data — always mounted, never baked
+**/media/
+
+# Unrelated workspace trees
+refactor/
+temp_fixes/
+test-images/
+tools/
+data/
+.playwright-mcp/
+plans/
+
+# VCS / editor / CI
+.git/
+.gitignore
+.kilo/
+
+# Old docker workspace (superseded by backend/Dockerfile + docker/)
+Deployable/docker/
+
+# Docs not needed for the build
+**/*.md

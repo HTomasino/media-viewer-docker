@@ -1,0 +1,19 @@
+# Runtime state
+.thumbnails/
+index/
+gotify-data/
+*.log
+*.log.*
+
+# Binaries and build artifacts
+*.exe
+server
+
+# Local configuration (holds notifier tokens — never commit)
+docker/config.docker.json
+backend/config.json
+Deployable/config.json
+
+# OS / editor
+Thumbs.db
+.DS_Store

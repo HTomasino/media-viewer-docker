@@ -1,0 +1,51 @@
+{
+  "_comment": "Media Viewer Server — container config template. Copy to config.docker.json, edit, then bind-mount at /app/config.json (the server READS AND WRITES this file: toggling gotify/discord via the API rewrites it in place). Relative paths resolve against the exe dir (/app) — absolute container paths are used here for clarity. Schema: backend/main.go Config struct.",
+  "port": 3000,
+  "directories": {
+    "images": "/media/images",
+    "manga": "/media/manga",
+    "h-manga": "/media/h-manga"
+  },
+  "thumbnail_dir": "/app/data/.thumbnails",
+  "watch_directories": true,
+  "mode": "release",
+  "rate_limit_rps": 1000,
+  "rate_limit_burst": 100,
+  "max_concurrent": 50,
+  "conn_limit_acquire_timeout_sec": 5,
+  "thumbnail_workers": 5,
+  "thumb_scale_factor": 0.5,
+  "thumb_max_width": 400,
+  "thumb_max_height": 300,
+  "request_timeout_sec": 30,
+  "max_request_mb": 10,
+  "trusted_proxies": ["127.0.0.1", "::1"],
+  "max_thumbnail_mb": 10,
+  "write_timeout_sec": 30,
+  "min_write_rate_bytes": 512000,
+  "responsive_buckets": [320, 640, 768, 1024, 1280, 1536, 1920, 2048],
+  "enable_preloading": true,
+  "preload_desktop_default": 3,
+  "preload_mobile_default": 1,
+  "max_preload_count": 5,
+  "rescan_interval_sec": 600,
+  "index_path": "/app/data/index",
+  "index_on_startup": "always",
+  "gotify": {
+    "enabled": false,
+    "binary_path": "/app/tools/gotify-server",
+    "port": 8180,
+    "admin_user": "admin",
+    "admin_pass": "change-me",
+    "app_token": "",
+    "data_dir": "/app/data/gotify-data",
+    "cooldown_sec": 360,
+    "default_priority": 10
+  },
+  "discord": {
+    "enabled": false,
+    "bot_token": "",
+    "recipient_id": "",
+    "cooldown_sec": 3600
+  }
+}

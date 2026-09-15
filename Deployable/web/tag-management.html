@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tag Management - Media Viewer</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        /* Override global body overflow:hidden — this page needs scrolling */
+        body {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            height: auto !important;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+
+        /* Tag Management Specific Styles */
+        .tag-mgmt-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .view-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .view-btn {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .view-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .view-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .section-panel {
+            background: var(--bg-elevated);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .exclusions-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .excluded-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .excluded-tag .remove-btn {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0;
+            margin-left: 0.25rem;
+        }
+
+        /* Tag Browser Styles */
+        .tag-browser {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .tag-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .stat-card .label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .tag-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .tag-cloud-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: var(--tag-size, 0.875rem);
+        }
+
+        .tag-cloud-item:hover {
+            background: rgba(99, 102, 241, 0.2);
+            transform: scale(1.05);
+        }
+
+        .tag-cloud-item.selected {
+            background: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+            box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5);
+        }
+
+        .tag-cloud-item .count {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .tag-cloud-item .tag-exclude-btn {
+            margin-left: 0.35rem;
+            padding: 0 0.3rem;
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 3px;
+            font-size: 0.7rem;
+            line-height: 1;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s, background 0.2s;
+        }
+
+        .tag-cloud-item .tag-exclude-btn:hover {
+            opacity: 1;
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        /* Data Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            color: var(--text-secondary);
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: var(--bg-elevated);
+        }
+
+        .data-table tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .data-table tr.selected {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-right: 0.25rem;
+            cursor: pointer;
+        }
+
+        .tag:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .tag.editing {
+            background: rgba(99, 102, 241, 0.3);
+        }
+
+        /* Inline Tag Editor */
+        .tag-editor {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            align-items: center;
+            min-height: 2rem;
+            padding: 0.25rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+        }
+
+        .tag-editor input {
+            flex: 1;
+            min-width: 100px;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            outline: none;
+            font-size: 0.875rem;
+        }
+
+        .tag-editor .tag {
+            margin: 0;
+        }
+
+        .tag-editor .tag .remove {
+            margin-left: 0.25rem;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+
+        .tag-editor .tag .remove:hover {
+            opacity: 1;
+        }
+
+        /* Autocomplete */
+        .tag-autocomplete {
+            position: absolute;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            min-width: 150px;
+        }
+
+        .tag-autocomplete-item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .tag-autocomplete-item:hover,
+        .tag-autocomplete-item.active {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Directory Items */
+        .dir-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dir-item:last-child {
+            border-bottom: none;
+        }
+
+        .dir-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .dir-info {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .dir-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Batch Operations Bar */
+        .batch-bar {
+            position: sticky;
+            bottom: 1rem;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .batch-bar .selection-info {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .batch-bar .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Thumbnail Status */
+        .thumbnail-status {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .status-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+
+        .status-item .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .status-item .label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .status-item.generated .value { color: #22c55e; }
+        .status-item.missing .value { color: #ef4444; }
+        .status-item.failed .value { color: #f59e0b; }
+        .status-item.orphaned .value { color: #9ca3af; }
+
+        /* Section Config */
+        .section-config {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .section-card {
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+
+        .section-card h4 {
+            margin: 0 0 0.5rem 0;
+            color: var(--text-secondary);
+        }
+
+        .section-card .dir-name {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Utilities */
+        .btn-small {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-icon {
+            padding: 0.375rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+
+        .checkbox-cell input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .text-secondary {
+            color: var(--text-secondary);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 0.5rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+
+        .btn-primary,
+        .btn-secondary {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            border: none;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover, #5558e0);
+        }
+
+        .btn-secondary {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-primary);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .gotify-status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .gotify-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .gotify-status-dot.running { background: #22c55e; }
+        .gotify-status-dot.stopped { background: #ef4444; }
+        .gotify-controls label {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            color: var(--text-primary);
+        }
+        #gotify-priority {
+            accent-color: var(--primary);
+        }
+
+        .gotify-settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .gotify-setting-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+
+        .gotify-setting-item .value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .gotify-setting-item .label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .discord-status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .discord-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .discord-status-dot.running { background: #22c55e; }
+        .discord-status-dot.stopped { background: #ef4444; }
+        .discord-controls label {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            color: var(--text-primary);
+        }
+
+        .discord-settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .discord-setting-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+
+        .discord-setting-item .value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .discord-setting-item .label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .discord-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .discord-form label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .discord-form input {
+            padding: 0.5rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <div class="tag-mgmt-container">
+        <h1>Tag Management</h1>
+        
+        <!-- View Tabs -->
+        <div class="view-tabs">
+            <button class="view-btn active" id="view-files-btn">Files</button>
+            <button class="view-btn" id="view-dirs-btn">Directories</button>
+            <button class="view-btn" id="view-tags-btn">Tag Browser</button>
+            <button class="view-btn" id="view-thumbnails-btn">Thumbnails</button>
+        </div>
+
+        <!-- Global Exclusions -->
+        <div class="section-panel">
+            <h2 class="section-title">Global Tag Exclusions</h2>
+            <p class="text-secondary" style="margin-bottom: 1rem;">
+                Tags listed here will be excluded from automatic tag extraction.
+            </p>
+            <div class="exclusions-list" id="excluded-tags-list">
+                <!-- Excluded tags rendered here -->
+            </div>
+            <div class="input-group">
+                <input type="text" id="global-exclude-input" placeholder="Enter tag to exclude...">
+                <button class="btn-primary" id="btn-add-exclusion">Add Exclusion</button>
+            </div>
+        </div>
+
+        <!-- Section Directory Config -->
+        <div class="section-panel">
+            <h2 class="section-title">Directory Configuration</h2>
+            <div class="section-config">
+                <div class="section-card">
+                    <h4>Images</h4>
+                    <div class="dir-name" id="images-dir-name">Not selected</div>
+                    <button class="btn-secondary btn-small change-dir-btn" data-section="images">Change</button>
+                    <button class="btn-secondary btn-small clear-dir-btn" data-section="images">Clear</button>
+                </div>
+                <div class="section-card">
+                    <h4>Manga</h4>
+                    <div class="dir-name" id="manga-dir-name">Not selected</div>
+                    <button class="btn-secondary btn-small change-dir-btn" data-section="manga">Change</button>
+                    <button class="btn-secondary btn-small clear-dir-btn" data-section="manga">Clear</button>
+                </div>
+                <div class="section-card">
+                    <h4>H-Manga</h4>
+                    <div class="dir-name" id="h-manga-dir-name">Not selected</div>
+                    <button class="btn-secondary btn-small change-dir-btn" data-section="h-manga">Change</button>
+                    <button class="btn-secondary btn-small clear-dir-btn" data-section="h-manga">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gotify Settings -->
+        <div class="section-panel" id="gotify-settings-panel">
+            <h2 class="section-title">
+                Gotify Settings
+                <div class="actions">
+                    <button class="btn-primary btn-small" id="btn-gotify-push-pending" title="Push notifications for all chapters that haven't been notified yet">Push Unsent</button>
+                    <button class="btn-primary btn-small" id="btn-gotify-toggle">Start</button>
+                    <button class="btn-secondary btn-small" id="btn-gotify-reset">Reset</button>
+                </div>
+            </h2>
+            <div id="gotify-status" style="margin-bottom: 1rem;">
+                <span class="text-secondary">Loading...</span>
+            </div>
+            <div class="gotify-settings-grid" id="gotify-settings-grid"></div>
+            <div id="gotify-pending-info" style="margin-bottom: 1rem;" class="hidden">
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px;">
+                    <span style="color: #f59e0b;">⚠</span>
+                    <span id="gotify-pending-count" style="color: var(--text-primary);">0 chapters have not been notified</span>
+                </div>
+            </div>
+            <div class="gotify-controls">
+                <label>
+                    <span>Message Priority</span>
+                    <input type="range" id="gotify-priority" min="0" max="10" value="5">
+                    <span id="gotify-priority-value">5</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Discord Settings -->
+        <div class="section-panel" id="discord-settings-panel">
+            <h2 class="section-title">
+                Discord Settings
+                <div class="actions">
+                    <button class="btn-primary btn-small" id="btn-discord-push-pending" title="Push notifications for all chapters that haven't been notified yet">Push Unsent</button>
+                    <button class="btn-secondary btn-small" id="btn-discord-test">Test</button>
+                    <button class="btn-primary btn-small" id="btn-discord-toggle">Enable</button>
+                </div>
+            </h2>
+            <div id="discord-status" style="margin-bottom: 1rem;">
+                <span class="text-secondary">Loading...</span>
+            </div>
+            <div class="discord-settings-grid" id="discord-settings-grid"></div>
+            <div id="discord-pending-info" style="margin-bottom: 1rem;" class="hidden">
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px;">
+                    <span style="color: #f59e0b;">⚠</span>
+                    <span id="discord-pending-count" style="color: var(--text-primary);">0 chapters have not been notified</span>
+                </div>
+            </div>
+            <div class="discord-form" id="discord-form">
+                <label>
+                    Bot Token
+                    <input type="password" id="discord-bot-token" placeholder="Paste bot token...">
+                </label>
+                <label>
+                    Recipient User ID
+                    <input type="text" id="discord-recipient-id" placeholder="Discord user ID...">
+                </label>
+                <label>
+                    Cooldown (seconds)
+                    <input type="number" id="discord-cooldown" min="0" value="3600">
+                </label>
+            </div>
+            <div class="discord-controls">
+                <button class="btn-secondary btn-small" id="btn-discord-save">Save Config</button>
+            </div>
+        </div>
+
+        <!-- Tag Browser View -->
+        <div id="tag-browser-view" class="section-panel hidden">
+            <h2 class="section-title">
+                Tag Browser
+                <div class="actions">
+                    <button class="btn-danger btn-small" id="btn-flush-selected-tags" title="Remove the selected tags from every file" disabled>Flush Selected Tags</button>
+                    <button class="btn-danger btn-small" id="btn-flush-all-tags" title="Remove ALL tags from every file">Flush All Tags</button>
+                </div>
+            </h2>
+            <p class="text-secondary" style="margin-bottom: 0.75rem;">
+                Click tags to select them, then "Flush Selected Tags" to remove them from every file.
+                "Flush All Tags" removes every tag from every file. These operations do not delete files.
+            </p>
+            <div class="tag-browser">
+                <div class="tag-stats-grid" id="tag-stats-grid">
+                    <!-- Stats rendered here -->
+                </div>
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                    <input type="text" id="tag-search" placeholder="Search tags..." style="flex: 1; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary);">
+                    <select id="tag-sort" style="padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary);">
+                        <option value="count-desc">Most Common</option>
+                        <option value="count-asc">Least Common</option>
+                        <option value="name-asc">Name A-Z</option>
+                        <option value="name-desc">Name Z-A</option>
+                    </select>
+                </div>
+                <div id="flush-selection-info" class="text-secondary hidden" style="margin-bottom: 0.5rem;">0 tags selected</div>
+                <div class="tag-cloud" id="tag-cloud">
+                    <!-- Tag cloud rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Thumbnails View -->
+        <div id="thumbnails-view" class="section-panel hidden">
+            <h2 class="section-title">
+                Thumbnail Status
+                <div class="actions">
+                    <button class="btn-primary btn-small" id="btn-generate-missing">Generate Missing</button>
+                    <button class="btn-danger btn-small" id="btn-cull-orphans">Cull Orphans</button>
+                </div>
+            </h2>
+            <div class="thumbnail-status" id="thumbnail-status">
+                <!-- Status rendered here -->
+            </div>
+            <div class="progress-container hidden" id="thumbnail-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="thumbnail-progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-text" id="thumbnail-progress-text">0 of 0 generated</div>
+            </div>
+        </div>
+
+        <!-- Files View -->
+        <div id="files-view" class="section-panel">
+            <h2 class="section-title">
+                Files
+                <div class="actions">
+                    <button class="btn-secondary btn-small" id="btn-select-all">Select All</button>
+                    <button class="btn-secondary btn-small" id="btn-select-none">Select None</button>
+                </div>
+            </h2>
+            <div id="files-list" style="max-height: 600px; overflow-y: auto;">
+                <!-- Files rendered here -->
+            </div>
+        </div>
+
+        <!-- Directories View -->
+        <div id="dirs-view" class="section-panel hidden">
+            <h2 class="section-title">Directories</h2>
+            <div id="dirs-list">
+                <!-- Directories rendered here -->
+            </div>
+        </div>
+
+        <!-- Batch Operations Bar -->
+        <div id="batch-bar" class="batch-bar hidden">
+            <span class="selection-info"><span id="selected-count">0</span> items selected</span>
+            <div class="actions">
+                <button class="btn-primary btn-small" id="batch-add-tags">Add Tags</button>
+                <button class="btn-secondary btn-small" id="batch-remove-tags">Remove Tags</button>
+                <button class="btn-danger btn-small" id="batch-clear-tags">Clear All</button>
+            </div>
+        </div>
+
+        <div style="margin-top: 2rem; text-align: center;">
+            <button class="btn-secondary" id="btn-back-to-gallery">&larr; Back to Gallery</button>
+        </div>
+    </div>
+
+    <!-- ES Module entry point -->
+    <script type="module" src="js/tag-management-app.js"></script>
+</body>
+</html>

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Viewer (Refactored)</title>
+    <link rel="stylesheet" href="css/styles.css?v=16">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        .settings-dropdown {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            background: var(--bg-secondary, #1e1e1e);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 8px;
+            padding: 1rem;
+            min-width: 220px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        .settings-item {
+            margin-bottom: 1rem;
+        }
+        .settings-item:last-child {
+            margin-bottom: 0;
+        }
+        .settings-item label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary, #aaa);
+        }
+        .settings-dropdown .styled-select {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--border-color, #333);
+            background: var(--bg-primary, #121212);
+            color: var(--text-primary, #eee);
+        }
+        #clear-cache-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-primary, #121212);
+            border: 1px solid var(--border-color, #333);
+            color: var(--text-primary, #eee);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #clear-cache-btn:hover {
+            background: var(--bg-secondary, #1e1e1e);
+        }
+        .active-tag-filter {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--primary, #4CAF50);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+            white-space: nowrap;
+        }
+        .active-tag-name {
+            font-weight: 500;
+        }
+        .clear-tag-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .clear-tag-btn:hover {
+            opacity: 1;
+        }
+        .tag-btn {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.35rem;
+            background: var(--bg-primary, #121212);
+            border: 1px solid var(--border-color, #333);
+            border-radius: 4px;
+            color: var(--text-primary, #eee);
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.9rem;
+        }
+        .tag-btn:hover {
+            background: var(--bg-secondary, #1e1e1e);
+        }
+        .tag-btn .tag-count {
+            color: var(--text-secondary, #aaa);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>Media Viewer</h2>
+                <button class="hamburger-btn" id="sidebar-toggle" title="Toggle Sidebar">
+                    <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" /></svg>
+                </button>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-row">
+                    <button class="nav-btn active" data-section="images">
+                        <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z" /></svg>
+                        Images
+                    </button>
+                    <button class="reindex-btn" data-section="images" title="Re-index Images" style="display:none;">⟳</button>
+                </div>
+                <div class="nav-row">
+                    <button class="nav-btn" data-section="manga">
+                        <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M19,2L14,6.5V17.5L19,13V2M6.5,5C4.55,5 2.45,5.4 1,6.5V21.16C1,21.41 1.25,21.6 1.5,21.6C1.6,21.6 1.65,21.59 1.75,21.59C3.1,20.9 5.05,20.5 6.5,20.5C8.45,20.5 10.55,20.9 11.9,22C12,22 12.05,22 12.14,22C12.39,22 12.64,21.75 12.64,21.5V10.2A11.12,11.12 0 0,0 6.5,5M11,19.5C9.64,18.84 7.64,18.5 6.5,18.5C5.17,18.5 3.55,18.8 2.5,19.29V8.5C3.55,8.04 4.88,7.82 6.5,7.82C8.11,7.82 9.45,8.05 10.5,8.5V19.5Z" /></svg>
+                        Manga
+                    </button>
+                    <button class="reindex-btn" data-section="manga" title="Re-index Manga" style="display:none;">⟳</button>
+                </div>
+                <div class="nav-row">
+                    <button class="nav-btn" data-section="h-manga">
+                        <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M21 3H3C2 3 1 4 1 5V19C1 20 2 21 3 21H21C22 21 23 20 23 19V5C23 4 22 3 21 3M21 19H3V5H21V19Z" /></svg>
+                        H-Manga
+                    </button>
+                    <button class="reindex-btn" data-section="h-manga" title="Re-index H-Manga" style="display:none;">⟳</button>
+                </div>
+            </nav>
+
+            <div class="sidebar-section">
+                <label class="btn-primary" style="display:none;" id="fallback-dir-label">
+                    Select Directory (Fallback)
+                    <input type="file" id="fallback-dir-input" webkitdirectory directory multiple style="display:none;">
+                </label>
+                <button class="btn-primary" id="select-dir-btn">Select Directory</button>
+            </div>
+
+            <div class="sidebar-section scan-status" id="scan-status">
+                <p>Status: <span id="status-text">Loading...</span></p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="scan-progress"></div>
+                </div>
+            </div>
+            
+            <!-- Manga Settings -->
+            <div class="sidebar-section" id="manga-settings-section" style="display:none;">
+                <h3>Manga Settings</h3>
+                <div class="input-group" style="flex-direction:column; gap:0.5rem;">
+                    <select id="manga-scale-select" class="styled-select" style="width:100%; min-width:unset;">
+                        <option value="original">Original</option>
+                        <option value="fit-width">Horizontal Fill</option>
+                        <option value="fit-height">Vertical Fill</option>
+                    </select>
+                    <select id="manga-fill-percent-side-select" class="styled-select" style="width:100%; min-width:unset; display:none;">
+                        <option value="100">100%</option>
+                        <option value="95">95%</option>
+                        <option value="90">90%</option>
+                        <option value="85">85%</option>
+                        <option value="80">80%</option>
+                        <option value="75">75%</option>
+                        <option value="70">70%</option>
+                        <option value="60">60%</option>
+                        <option value="50">50%</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Favorites Section -->
+            <div class="sidebar-section compact-mobile" id="favorites-section" style="display:none;">
+                <h3>Favorites</h3>
+                <button id="favorites-toggle-btn">☆ Show Favorites Only</button>
+                <button id="random-btn" class="btn-secondary">🎲 Random</button>
+                <button id="favorite-current-btn" style="display:none;">☆ Add to Favorites</button>
+            </div>
+
+            <!-- Tags Section -->
+            <div class="sidebar-section tags-section compact-mobile" id="global-tags-section">
+                <h3>Tags</h3>
+                <div class="tag-filters" id="tag-filters-container">
+                </div>
+            </div>
+
+            <!-- Tag Management Context -->
+            <div class="sidebar-section tag-assignment-section" id="tag-assignment" style="display:none;">
+                <h3>Active Tags</h3>
+                <div id="active-image-tags" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;"></div>
+                <p class="text-sm">Add New Tags</p>
+                <div class="input-group">
+                    <input type="text" id="new-tags-input" placeholder="tag1 tag2...">
+                    <button class="btn-icon" id="add-tags-btn" title="Add Tags">
+                        <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Drawer backdrop (mobile): taps close the slide-in sidebar -->
+        <button class="sidebar-backdrop" id="sidebar-backdrop" aria-label="Close sidebar" tabindex="-1"></button>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <button class="hamburger-floating" id="sidebar-open" title="Open Sidebar">
+                <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" /></svg>
+            </button>
+            
+            <header class="top-header">
+                <div class="search-container">
+                    <svg viewBox="0 0 24 24" class="search-icon"><path fill="currentColor" d="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z" /></svg>
+                    <div class="active-tag-filter" id="active-tag-filter" style="display:none;">
+                        <span class="active-tag-name" id="active-tag-name"></span>
+                        <button class="clear-tag-btn" id="clear-tag-btn" title="Clear filter"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg></button>
+                    </div>
+                    <input type="text" id="search-bar" placeholder="Search files or tags...">
+                </div>
+                
+                <div class="header-actions">
+                    <div class="view-controls" id="manga-view-controls" style="display:none;">
+                        <button class="icon-btn active" id="view-mode-column" title="Column Mode">
+                                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M10,21V17H14V21H10M10,15V11H14V15H10M10,9V5H14V9H10" /></svg>
+                        </button>
+                        <button class="icon-btn" id="view-mode-single" title="Single Mode">
+                            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M10,21V3H14V21H10Z" /></svg>
+                        </button>
+                        <button class="icon-btn" id="view-mode-pair" title="Pair Mode">
+                            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M11,21V3H5V21H11M19,21V3H13V21H19Z" /></svg>
+                        </button>
+                    </div>
+
+                    <a href="tag-management.html" class="icon-btn" title="Tag Management">
+                        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M21.41,11.58L12.41,2.58C12.05,2.22 11.55,2 11,2H4C2.89,2 2,2.89 2,4V11C2,11.55 2.22,12.05 2.59,12.41L11.58,21.41C11.95,21.77 12.45,22 13,22C13.55,22 14.05,21.77 14.41,21.41L21.41,14.41C21.78,14.05 22,13.55 22,13C22,12.45 21.77,11.94 21.41,11.58M13,20L4,11V4H11L20,13L13,20M6.5,5C7.33,5 8,5.67 8,6.5C8,7.33 7.33,8 6.5,8C5.67,8 5,7.33 5,6.5C5,5.67 5.67,5 6.5,5Z" /></svg>
+                    </a>
+                    <button class="icon-btn" id="settings-toggle" title="Settings">
+                        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" /></svg>
+                    </button>
+                    <div class="settings-dropdown" id="settings-dropdown" style="display:none;">
+                        <div class="settings-item">
+                            <label for="preload-count-select">Images to Preload</label>
+                            <select id="preload-count-select" class="styled-select">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <label for="manga-page-fill-select">Manga Page Fill</label>
+                            <div style="display:flex; flex-direction:column; gap:0.4rem;">
+                                <select id="manga-page-fill-select" class="styled-select">
+                                    <option value="original">Original</option>
+                                    <option value="fit-width">Fit Width</option>
+                                    <option value="fit-height">Fit Height</option>
+                                </select>
+                                <select id="manga-fill-percent-select" class="styled-select" style="display:none;">
+                                    <option value="100">100%</option>
+                                    <option value="95">95%</option>
+                                    <option value="90">90%</option>
+                                    <option value="85">85%</option>
+                                    <option value="80">80%</option>
+                                    <option value="75">75%</option>
+                                    <option value="70">70%</option>
+                                    <option value="60">60%</option>
+                                    <option value="50">50%</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <label for="manga-load-mode-select">Image Loading</label>
+                            <select id="manga-load-mode-select" class="styled-select">
+                                <option value="lazy">Lazy Load</option>
+                                <option value="sequential">Sequential Load</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <label for="image-cache-limit-select">Cached Images Limit</label>
+                            <select id="image-cache-limit-select" class="styled-select">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                                <option value="500">500</option>
+                                <option value="0">Unlimited</option>
+                            </select>
+                        </div>
+                        <div class="settings-item">
+                            <button class="btn-secondary" id="clear-cache-btn" style="width:100%;">
+                                Clear Cached Images
+                            </button>
+                        </div>
+                    </div>
+                    <button class="icon-btn" id="theme-toggle" title="Toggle Theme">
+                        <svg viewBox="0 0 24 24" class="moon-icon"><path fill="currentColor" d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.11,19.07C15.14,23.04 8.71,23.04 4.74,19.07C0.77,15.1 0.77,8.67 4.74,4.7C5.14,4.31 5.56,3.95 6.01,3.64C6.76,3.11 7.94,4 7.86,4.83C7.65,7.18 8.13,9.65 9.53,11.69C11.5,14.61 14.93,16.29 18.2,15.93C18.45,15.9 18.71,15.92 18.97,15.95Z" /></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Breadcrumbs -->
+            <div id="gallery-breadcrumbs" class="gallery-breadcrumbs" style="display:none;">
+                <button class="btn-secondary" id="back-to-artists-btn">
+                    <svg viewBox="0 0 24 24" class="icon" style="margin-right:0.5rem;"><path fill="currentColor" d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
+                    Back to Artists
+                </button>
+                <span id="breadcrumb-artist-name" class="breadcrumb-text">Artist Name</span>
+            </div>
+
+            <!-- Gallery View -->
+            <div id="gallery-container" class="gallery-grid"></div>
+
+            <!-- Manga Reader -->
+            <div id="manga-view-container" class="manga-reader" style="display:none;">
+                <div class="reader-controls reader-top-bar" id="reader-top-bar">
+                    <button class="btn-secondary btn-icon" id="manga-back-btn" title="Back to Gallery">
+                        <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
+                    </button>
+                    
+                    <div class="reader-chapter-select">
+                        <select id="chapter-dropdown" class="styled-select"></select>
+                    </div>
+
+                    <div class="reader-actions">
+                        <div class="view-controls" id="reader-view-controls">
+                            <button class="icon-btn" id="reader-mode-single" title="Single Page">
+                                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M10,21V3H14V21H10Z" /></svg>
+                            </button>
+                            <button class="icon-btn" id="reader-mode-pair" title="Double Page">
+                                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M11,21V3H5V21H11M19,21V3H13V21H19Z" /></svg>
+                            </button>
+                            <button class="icon-btn active" id="reader-mode-strip" title="Long Strip">
+                            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M10,21V17H14V21H10M10,15V11H14V15H10M10,9V5H14V9H10" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="manga-images-wrapper" class="reader-content view-strip" tabindex="0"></div>
+                
+                <div id="reader-hit-left" class="reader-hit-zone hit-left"></div>
+                <div id="reader-hit-right" class="reader-hit-zone hit-right"></div>
+                <div id="reader-hit-center" class="reader-hit-zone hit-center" title="Toggle Menu"></div>
+
+                <button id="reader-next-chapter-btn" class="reader-next-btn" title="Next Chapter">Next Chapter &rarr;</button>
+
+                <!-- Always-visible exit handle while in immersive mode (mobile).
+                     Visibility is CSS-driven: hidden by default, shown by
+                     body.immersive-mode (no inline style — that would beat
+                     the media-query rule). -->
+                <button id="immersive-exit-handle" class="immersive-exit-handle" title="Show controls" aria-label="Show controls">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" /></svg>
+                </button>
+
+                <div class="reader-controls reader-bottom-bar" id="reader-bottom-bar">
+                    <button class="icon-btn" id="reader-prev-page" title="Previous Page">
+                        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z" /></svg>
+                    </button>
+                    <span id="reader-page-indicator" class="page-indicator">1 / 1</span>
+                    <button class="icon-btn" id="reader-next-page" title="Next Page">
+                        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" /></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Series Splash -->
+            <div id="series-splash-container" class="series-splash" style="display:none;">
+                <div class="splash-header">
+                    <button class="btn-secondary splash-back-btn" id="splash-back-btn">
+                        <svg viewBox="0 0 24 24" class="icon"><path fill="currentColor" d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" /></svg>
+                        Back
+                    </button>
+                </div>
+                <div class="splash-body">
+                    <div class="splash-cover">
+                        <img id="splash-cover-img" alt="Series cover">
+                    </div>
+                    <div class="splash-info">
+                        <h1 id="splash-title" class="splash-title"></h1>
+                        <div id="splash-meta" class="splash-meta"></div>
+                        <div class="splash-actions">
+                            <button id="splash-primary-btn" class="btn-primary"></button>
+                        </div>
+                        <div id="splash-description" class="splash-description"></div>
+                        <div id="splash-source" class="splash-source"></div>
+                    </div>
+                </div>
+                <div class="splash-chapters">
+                    <h2>Chapters</h2>
+                    <div id="splash-chapter-list" class="splash-chapter-list"></div>
+                </div>
+            </div>
+
+            <!-- Media Modal -->
+            <div id="media-modal" class="modal">
+                <span class="close-modal" id="close-modal">×</span>
+                <img class="modal-content" id="modal-img">
+                <video class="modal-content" id="modal-video" controls></video>
+                <div id="modal-info"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ES Module entry point — version query string forces browsers to refetch after updates -->
+    <script type="module" src="js/app.js?v=35"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Unregister old service workers first, then register new one
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    registrations.forEach(reg => {
+                        if (reg.scope !== location.origin + '/') {
+                            reg.unregister();
+                        }
+                    });
+                });
+                navigator.serviceWorker.register('./sw.js')
+                    .then(r => {
+                        console.log('SW registered!');
+                        // Force update to clear old caches
+                        r.update();
+                    })
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>

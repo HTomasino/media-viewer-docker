@@ -1,0 +1,83 @@
+# Media Viewer — Docker Compose stack for Proxmox (LXC/VM)
+# Usage:
+#   cp config.docker.json.example config.docker.json   # edit to taste
+#   docker compose up -d
+#
+# The media-viewer service is watchtower-opt-in via the label below; the
+# watchtower sidecar only manages containers carrying that label.
+
+services:
+  media-viewer:
+    # Watchtower can only update images pulled from a REGISTRY. As long as the
+    # image is built locally and never pushed, this `image:` name resolves to
+    # Docker Hub (which doesn't have it) and the update sidecar does nothing.
+    # For unattended updates: push to your registry and set the full path here,
+    # e.g. image: registry.lan/media-viewer:latest
+    image: media-viewer:latest
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: media-viewer
+    restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      # Server reads AND writes this file (saveConfig on notifier toggles)
+      - ./config.docker.json:/app/config.json
+      # Media is mounted READ-ONLY: the server never writes to media dirs
+      # (thumbnails/index live in the media-data volume). Adjust hosts paths
+      # to your Proxmox/NFS/SMB mount points.
+      - /mnt/pve/media/images:/media/images:ro
+      - /mnt/pve/media/manga:/media/manga:ro
+      - /mnt/pve/media/h-manga:/media/h-manga:ro
+      # Thumbnails + index + (optionally) gotify data — survives updates
+      - media-data:/app/data
+    environment:
+      # TZ + tzdata in the image -> correct mtime display in the UI
+      - TZ=America/New_York
+      # Directory overrides if you don't want to edit the config file:
+      # - MV_IMAGES_DIR=/media/images
+      # - MV_MANGA_DIR=/media/manga
+      # - MV_HMANGA_DIR=/media/h-manga
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Unattended image updates. Watches daily at 04:00 and recreates ONLY
+  # containers labeled com.centurylinklabs.watchtower.enable=true.
+  # Security note: this socket mount is root-equivalent on the LXC/VM.
+  # Acceptable on a single-purpose appliance; on a shared host prefer a
+  # socket proxy (tecnativa/docker-socket-proxy) or Diun (read-only).
+  watchtower:
+    image: containrrr/watchtower
+    container_name: media-viewer-updater
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_SCHEDULE=0 0 4 * * *
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - TZ=America/New_York
+      # Optional notifications (uncomment + fill in):
+      # - WATCHTOWER_NOTIFICATIONS=shoutrrr
+      # - WATCHTOWER_NOTIFICATION_URL=gotify://<host>:<port>/<token>
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  media-data:

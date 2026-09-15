@@ -1,0 +1,1822 @@
+/* styles.css */
+:root {
+    --bg-base: #fafafa;
+    --bg-surface: #ffffff;
+    --bg-elevated: #f0f0f0;
+    --text-main: #111827;
+    --text-muted: #6b7280;
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --border: #e5e7eb;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --transition: 0.2s ease-in-out;
+    --sidebar-width: 320px;
+}
+
+body.dark-mode {
+    --bg-base: #0f111a;
+    --bg-surface: #1e2130;
+    --bg-elevated: #2a2e42;
+    --text-main: #f8fafc;
+    --text-muted: #cbd5e1;
+    --primary: #6366f1;
+    --primary-hover: #818cf8;
+    --danger: #ef4444;
+    --danger-hover: #f87171;
+    --border: #334155;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Support safe area on notched devices (iPhone X+) */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .app-container {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    overflow: hidden;
+    /* Use dvh (dynamic viewport height) on mobile to account for browser chrome.
+       100vh includes the area behind the address bar, so content goes off-screen.
+       dvh adjusts as the address bar shows/hides. Fallback to 100vh for older browsers. */
+    height: 100vh;
+    height: 100dvh;
+}
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+}
+
+/* Sidebar */
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background-color: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 1.25rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+    z-index: 20;
+    transition: margin-left 0.3s ease, opacity 0.3s ease, transform 0.3s ease, max-height 0.3s ease, padding 0.3s ease;
+}
+
+.sidebar.collapsed {
+    margin-left: calc(-1 * var(--sidebar-width));
+    opacity: 0;
+    pointer-events: none;
+}
+
+body.dark-mode .sidebar {
+    box-shadow: 2px 0 15px rgba(0,0,0,0.2);
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.sidebar-header h2 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--primary), #a855f7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+}
+
+.hamburger-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hamburger-btn:hover {
+    background: var(--bg-elevated);
+    color: var(--text-main);
+}
+
+/* Floating hamburger that appears when sidebar is collapsed */
+.hamburger-floating {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 130;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+.hamburger-floating:hover {
+    background: var(--bg-elevated);
+    color: var(--text-main);
+}
+.sidebar.collapsed ~ .main-content .hamburger-floating {
+    display: flex;
+}
+
+.sidebar.collapsed ~ .main-content .top-header {
+    padding-left: 4rem;
+}
+
+/* Modal should expand when sidebar is collapsed */
+/* The modal is inside .main-content, so target that */
+.sidebar.collapsed ~ .main-content .modal {
+    left: 0;
+    width: 100vw;
+}
+
+.sidebar.collapsed ~ .main-content .modal .close-modal {
+    right: 1rem;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1.25rem;
+}
+
+.nav-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.nav-row .nav-btn {
+    flex: 1;
+}
+
+.reindex-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+
+.reindex-btn:hover {
+    background-color: var(--bg-elevated);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.reindex-btn.scanning {
+    animation: spin 1s linear infinite;
+    color: var(--primary);
+    border-color: var(--primary);
+    pointer-events: none;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.nav-btn, .btn-primary, .btn-secondary, a.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+}
+
+.nav-btn:hover {
+    background-color: var(--bg-elevated);
+    color: var(--text-main);
+}
+
+.nav-btn.active {
+    background-color: rgba(99, 102, 241, 0.1);
+    color: var(--primary);
+}
+
+.icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* Base Buttons */
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+    width: 100%;
+}
+.btn-primary:active {
+    transform: scale(0.98);
+}
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+    background-color: var(--bg-elevated);
+    color: var(--text-main);
+}
+.btn-secondary:hover {
+    background-color: var(--border);
+}
+
+.btn-danger {
+    background-color: var(--danger);
+    color: white;
+}
+.btn-danger:hover {
+    background-color: var(--danger-hover);
+}
+
+.sidebar-section {
+    margin-bottom: 1.25rem;
+}
+
+.sidebar-section h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+/* Progress bar */
+.progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background-color: var(--bg-elevated);
+    border-radius: 3px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background-color: var(--primary);
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+/* Tags Cloud */
+.tag-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* Tag buttons in sidebar (popular tags) */
+.tag-btn {
+    background-color: var(--bg-elevated);
+    padding: 0.35rem 0.85rem;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-main);
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.tag-btn:hover {
+    background-color: rgba(99, 102, 241, 0.1);
+    color: var(--primary);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.tag-btn .tag-name {
+    color: inherit;
+}
+
+.tag-btn .tag-count {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.tag-btn:hover .tag-count {
+    color: var(--primary);
+}
+
+.tag {
+    background-color: var(--bg-elevated);
+    padding: 0.35rem 0.85rem;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-main);
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: var(--transition);
+}
+
+.tag:hover {
+    background-color: rgba(99, 102, 241, 0.1);
+    color: var(--primary);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.continue-badge {
+    display: inline-block;
+    background-color: var(--primary);
+    color: white;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.continue-badge:hover {
+    background-color: var(--primary-hover);
+}
+
+.favorite-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    width: 24px;
+    height: 24px;
+    background: rgba(0, 0, 0, 0.5);
+    color: var(--text-secondary, #aaa);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    z-index: 2;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s, color 0.15s;
+}
+
+.favorite-badge:hover {
+    transform: scale(1.15);
+}
+
+.favorite-badge.is-favorite {
+    background: var(--primary, #4CAF50);
+    color: white;
+}
+
+#favorites-section {
+    margin-top: 0.5rem;
+}
+
+#favorites-toggle-btn {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+#favorites-toggle-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+#favorite-current-btn {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: none;
+}
+
+#favorite-current-btn.is-favorite {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.tag-delete-btn {
+    margin-left: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.tag-delete-btn:hover {
+    background-color: rgba(255, 60, 60, 0.8);
+    color: white;
+}
+
+.tag.selected {
+    background-color: var(--primary);
+    color: white;
+}
+
+/* Input group */
+.input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.input-group input {
+    flex: 1;
+    background-color: var(--bg-base);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-md);
+    outline: none;
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: var(--transition);
+}
+.input-group input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+.btn-icon {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0.6rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+.btn-icon:hover {
+    background-color: var(--primary-hover);
+}
+.text-sm {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    position: relative;
+    background-color: var(--bg-base);
+}
+
+.top-header {
+    height: 70px;
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 110;
+    transition: transform 0.3s ease, opacity 0.3s ease, height 0.3s ease;
+}
+
+body.dark-mode .top-header {
+    background-color: rgba(30, 33, 48, 0.8);
+}
+
+.search-container {
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-elevated);
+    padding: 0.5rem 1rem;
+    border-radius: 100px;
+    width: 400px;
+    border: 1px solid transparent;
+    transition: var(--transition);
+}
+.search-container:focus-within {
+    border-color: var(--primary);
+    background-color: var(--bg-surface);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.search-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--text-muted);
+    margin-right: 0.75rem;
+}
+.search-container input {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    flex: 1;
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Breadcrumbs */
+.gallery-breadcrumbs {
+    display: flex;
+    align-items: center;
+    padding: 1rem 2rem;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border);
+    background-color: var(--bg-surface);
+}
+.breadcrumb-text {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+.gallery-breadcrumbs .btn-secondary {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+.icon-btn svg {
+    width: 22px;
+    height: 22px;
+}
+.icon-btn:hover {
+    background-color: var(--bg-elevated);
+    color: var(--primary);
+}
+.view-controls {
+    display: flex;
+    gap: 0.25rem;
+    background-color: var(--bg-elevated);
+    padding: 0.25rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+.view-controls .icon-btn.active {
+    background-color: var(--bg-surface);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Text button variant for view controls */
+.view-controls .btn-text {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.view-controls .btn-text:hover {
+    background-color: var(--bg-elevated);
+    color: var(--text-main);
+}
+
+.view-controls .btn-text.active {
+    background-color: var(--bg-surface);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Gallery Grid */
+.gallery-grid {
+    padding: 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+}
+
+.gallery-item {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s;
+    position: relative;
+    aspect-ratio: 2/3;
+    display: flex;
+    flex-direction: column;
+}
+
+.gallery-item:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+}
+
+.gallery-item img, .gallery-item video, .thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.thumb-placeholder {
+    background-size: cover;
+    background-position: center;
+    background-color: var(--bg-surface);
+}
+
+.gallery-item:hover img {
+    transform: scale(1.05);
+}
+
+.gallery-item-info {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.4) 60%, transparent);
+    padding: 1.5rem 1rem 1rem;
+    color: white;
+}
+
+.gallery-item-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    word-break: break-word;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+/* Selected state for gallery */
+.gallery-item.selected {
+    border: 3px solid var(--primary);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+}
+
+/* --- MANGA READER (MangaDex Style) --- */
+.manga-reader {
+    flex: 1;
+    background-color: #000; /* Deep black for reading */
+    z-index: 10; 
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Auto-hiding Controls (Top and Bottom bars) */
+.reader-controls {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background-color: rgba(15, 17, 26, 0.9);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 102;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.reader-controls.hidden-controls {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.reader-top-bar {
+    top: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.reader-bottom-bar {
+    bottom: 0;
+    justify-content: center;
+    gap: 2rem;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* UI Hidden state for reader controls */
+.reader-controls.ui-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.reader-top-bar.ui-hidden {
+    transform: translateY(-100%);
+}
+
+.reader-bottom-bar.ui-hidden {
+    transform: translateY(100%);
+}
+
+/* Old hidden-controls class (keep for compatibility) */
+.reader-top-bar.hidden-controls {
+    transform: translateY(-100%);
+}
+
+.reader-bottom-bar.hidden-controls {
+    transform: translateY(100%);
+}
+.reader-top-bar.hidden-controls {
+    transform: translateY(-100%);
+}
+
+.reader-bottom-bar {
+    bottom: 0;
+    justify-content: center;
+    gap: 2rem;
+}
+.reader-bottom-bar.hidden-controls {
+    transform: translateY(100%);
+}
+
+.styled-select {
+    background-color: var(--bg-surface);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    cursor: pointer;
+    min-width: 250px;
+    outline: none;
+}
+.styled-select:focus {
+    border-color: var(--primary);
+}
+
+.page-indicator {
+    font-weight: 600;
+    font-size: 1.1rem;
+    min-width: 80px;
+    text-align: center;
+}
+
+/* Reader hit zones (for page turning and UI toggling) */
+.reader-hit-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 101;
+    cursor: pointer;
+}
+
+/* Reader hit zones are always pointer-events: none on mobile.
+   Taps are handled via JS touch events on the wrapper, not hit zone click handlers. */
+.hit-left {
+    left: 0;
+    width: 33%;
+}
+.hit-right {
+    right: 0;
+    width: 33%;
+}
+.hit-center {
+    left: 33%;
+    right: 33%;
+}
+
+/* Reading Content Container */
+.reader-content {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    align-items: center;
+    outline: none; /* Removes focus border when clicking */
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch; /* Smooth momentum scrolling on iOS */
+    --fill-percent: 100%;
+}
+
+/* View Modes */
+/* Single Page */
+.reader-content.view-single {
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.reader-content.view-single img {
+    max-width: 100%;
+    max-height: 100vh;
+    object-fit: contain;
+    margin: auto;
+}
+
+/* Pair Page */
+.reader-content.view-pair {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+.reader-content.view-pair img {
+    max-width: 50vw;
+    max-height: 100vh;
+    object-fit: contain;
+}
+@media (max-width: 768px) {
+    .reader-content.view-pair img { max-width: 100vw; }
+}
+
+/* Long Strip */
+.reader-content.view-strip {
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.reader-content.view-strip img {
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+/* --- OVERRIDES: Manga Scaling Modes --- */
+.reader-content[data-scale-mode="fit-width"] img {
+    width: var(--fill-percent, 100%) !important;
+    max-width: var(--fill-percent, 100%) !important;
+    height: auto !important;
+    max-height: none !important;
+    object-fit: contain;
+}
+
+.reader-content[data-scale-mode="fit-height"] img {
+    height: var(--fill-percent, 100%) !important;
+    max-height: var(--fill-percent, 100%) !important;
+    width: auto !important;
+    max-width: none !important;
+    object-fit: contain;
+}
+
+.reader-content[data-scale-mode="original"] img {
+    max-width: none !important;
+    max-height: none !important;
+    width: auto !important;
+    height: auto !important;
+}
+
+/* Floating immersive-exit handle: hidden by default; the immersive-mode
+   block (below) reveals it on mobile. Sits above reader controls. */
+.immersive-exit-handle {
+    display: none;
+    position: fixed;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 2.4rem;
+    height: 2.4rem;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 17, 26, 0.85);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    z-index: 150;
+    cursor: pointer;
+}
+
+/* End-of-Chapter Navigation Button */
+.reader-next-btn {
+    display: none;
+    position: absolute;
+    bottom: 5rem;
+    right: 1.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: white;
+    background: linear-gradient(135deg, var(--primary), #a855f7);
+    border: none;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.2s;
+    box-shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.5);
+    z-index: 110; /* Above hit zones */
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    letter-spacing: 0.02em;
+}
+
+.reader-next-btn:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+    box-shadow: 0 8px 25px -2px rgba(99, 102, 241, 0.6);
+}
+
+.reader-next-btn:active {
+    transform: scale(0.97);
+}
+
+/* Modal */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000; 
+    left: var(--sidebar-width); /* Offset for sidebar */
+    top: 0;
+    width: calc(100% - var(--sidebar-width)); /* Fill remaining space */
+    height: 100%; 
+    background-color: rgba(0,0,0,0.95);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    margin: auto;
+    display: block;
+    max-width: 98%;
+    max-height: 98%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    border-radius: var(--radius-md);
+    object-fit: contain;
+    transition: max-height 0.3s ease;
+}
+
+/* Modal Grid Styles */
+.modal-grid-container {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+    gap: 1.25rem !important;
+    padding: 1.5rem !important;
+    align-content: start;
+}
+
+.modal-grid-container .gallery-item {
+    aspect-ratio: 2/3;
+    height: auto;
+    margin: 0;
+}
+
+.modal-grid-container .gallery-item-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.close-modal {
+    position: absolute;
+    top: 20px;
+    right: 40px;
+    color: rgba(255,255,255,0.7);
+    font-size: 40px;
+    font-weight: 300;
+    cursor: pointer;
+    transition: color 0.2s;
+    line-height: 1;
+    z-index: 1001;
+}
+.close-modal:hover {
+    color: white;
+}
+
+/* Animation keyframes for notifications */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+.tag-management-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+}
+
+.tag-management-table th, .tag-management-table td {
+    padding: 1.25rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.tag-management-table th {
+    background-color: var(--bg-elevated);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.tag-management-table tr:hover {
+    background-color: rgba(99, 102, 241, 0.05);
+}
+
+.preview-img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+}
+
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
+
+/* Utility classes for tag-management.html */
+.flex {
+    display: flex;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.gap-0-5 {
+    gap: 0.5rem;
+}
+
+.gap-0-75 {
+    gap: 0.75rem;
+}
+
+.mt-0-25 {
+    margin-top: 0.25rem;
+}
+
+.mb-0-5 {
+    margin-bottom: 0.5rem;
+}
+
+.mb-0-75 {
+    margin-bottom: 0.75rem;
+}
+
+.h-0-5 {
+    height: 0.5rem;
+}
+
+.h-1 {
+    height: 1rem;
+}
+
+.font-inherit {
+    font-family: inherit;
+}
+
+.font-size-1-25 {
+    font-size: 1.25rem;
+}
+
+.mb-1 {
+    margin-bottom: 1rem;
+}
+
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+.btn-compact {
+    flex: 0;
+    padding: 0.6rem 1rem;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.font-weight-600 {
+    font-weight: 600;
+}
+
+.color-text-main {
+    color: var(--text-main);
+}
+
+.color-text-muted {
+    color: var(--text-muted);
+}
+
+.text-right-align {
+    text-align: right;
+}
+
+/* Modal specific styles */
+.modal-content-wrapper {
+    width: 90%;
+    max-width: 1200px;
+    margin: 4rem auto 0;
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-grid-scroll {
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Width utilities */
+.w-50px {
+    width: 50px;
+}
+
+.w-80px {
+    width: 80px;
+}
+
+.w-20pct {
+    width: 20%;
+}
+
+.w-30pct {
+    width: 30%;
+}
+
+.w-full {
+    width: 100%;
+}
+
+/* Alignment utilities */
+.align-items-center {
+    align-items: center;
+}
+
+.mt-1 {
+    margin-top: 1rem;
+}
+
+/* Mobile Responsive - Fixed Layout */
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column !important;
+        height: 100vh;
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
+    }
+
+    /* MOBILE SIDEBAR = FIXED SLIDE-IN DRAWER.
+       The old top-strip layout (max-height 110px, in-flow) could not hold
+       the nav + favorites + tags content — everything below the clip line
+       was invisible, and the drawer approach guarantees the sidebar can
+       never render behind the gallery (it's positioned fixed with a
+       z-index above everything).
+
+       Open/close is driven by the .sidebar-drawer-open class on the
+       sidebar itself (configState.toggleSidebar). */
+    .sidebar {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        width: min(80vw, 320px) !important;
+        min-width: 0 !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        flex: none;
+        border-right: 1px solid var(--border);
+        border-bottom: none !important;
+        padding: 0.75rem;
+        overflow-y: auto;
+        z-index: 200;
+        background: var(--bg-base);
+        transform: translateX(-105%);
+        transition: transform 0.25s ease;
+        box-shadow: none;
+    }
+
+    .sidebar.sidebar-drawer-open {
+        transform: translateX(0);
+        box-shadow: 0 0 24px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Nav stacks vertically inside the drawer */
+    .sidebar-nav {
+        display: flex;
+        flex-direction: column !important;
+        flex-wrap: nowrap;
+        gap: 0.4rem;
+        overflow: visible !important;
+        flex-shrink: 0;
+        min-height: 0 !important;
+    }
+
+    .nav-btn {
+        width: 100%;
+        white-space: normal;
+    }
+
+    /* All sidebar sections visible in the drawer (tags, favorites, etc.) */
+    .sidebar > .sidebar-section:not(.sidebar-header):not(.scan-status) {
+        display: block !important;
+        margin-bottom: 0.75rem;
+    }
+
+    /* Backdrop behind the drawer */
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 199;
+        border: none;
+        padding: 0;
+    }
+
+    .sidebar-backdrop.visible {
+        display: block;
+    }
+
+    /* Floating hamburger: the ONLY way to open the drawer (fixed top-left,
+       above the drawer backdrop). Always visible outside the reader. */
+    .hamburger-floating {
+        display: flex !important;
+        position: fixed;
+        top: 0.6rem;
+        left: 0.6rem;
+        width: 2.6rem;
+        height: 2.6rem;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 17, 26, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        z-index: 201;
+        cursor: pointer;
+    }
+
+    .hamburger-btn {
+        display: flex !important;
+        width: 2rem;
+        height: 2rem;
+        padding: 0.3rem;
+    }
+    
+    .nav-btn {
+        white-space: nowrap;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+    
+    .main-content {
+        width: 100vw !important;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    
+    .gallery-grid {
+        width: 100%;
+        padding: 0.75rem;
+        gap: 0.75rem;
+    }
+    
+    /* Ensure top-header (and its settings dropdown) renders above the manga-reader */
+    .top-header {
+        z-index: 120 !important;
+        height: 54px !important;
+        min-height: 54px !important;
+        /* Left padding clears the fixed floating hamburger (2.6rem wide at
+           0.6rem offset) so the search bar starts beside it, not under it. */
+        padding: 0 0.75rem 0 3.6rem !important;
+    }
+    
+    .search-container {
+        width: 100% !important;
+    }
+    
+    .header-actions {
+        gap: 0.5rem !important;
+    }
+    
+    /* Prevent the gallery-breadcrumbs from eating space on mobile */
+    .gallery-breadcrumbs {
+        padding: 0.5rem 0.75rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .gallery-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .gallery-item {
+        aspect-ratio: 3/4;
+    }
+}
+
+
+/* Lazy Loading for Manga Images */
+.lazy-manga-image {
+    width: 100%;
+    height: auto;
+    min-height: 50vh;
+    background-color: var(--bg-elevated);
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="50" x="50" text-anchor="middle" fill="%23666" font-size="14">Loading...</text></svg>');
+    background-size: 100px;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: opacity 0.3s ease;
+    opacity: 0.5;
+}
+
+.lazy-manga-image.loaded {
+    opacity: 1;
+    background-image: none;
+}
+
+/* Ensure smooth scroll in manga reader */
+.reader-content.view-strip {
+    scroll-behavior: smooth;
+}
+
+.manga-page {
+    display: block;
+    width: 100%;
+    height: auto;
+    /* Prevent image drag gesture on mobile Safari/WebKit which blocks scroll */
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: pan-y;
+}
+
+/* Placeholder state: images without a src need a tall minimum height
+   so they occupy real space in the layout. Without src, imgs have 0 height
+   and would all be "in viewport" simultaneously, causing a flood of requests.
+   The inline style (img.style.minHeight = '120vh') is the primary guarantee;
+   this CSS rule is a safety net for cases where the inline style is missing
+   or removed prematurely. */
+.manga-page:not([src]):not([data-src]),
+.manga-page[data-placeholder="true"] {
+    min-height: 120vh;
+    background: #111;
+}
+
+
+/* Mobile Modal Fix */
+@media (max-width: 768px) {
+    .modal {
+        left: 0 !important;
+        width: 100vw !important;
+    }
+    
+    .modal-content {
+        max-width: 95vw !important;
+        max-height: 80vh !important;
+    }
+}
+
+/* Reader-open state: the sidebar is hidden on ALL breakpoints while the
+   reader is up. This is keyed off a dedicated body class, NOT the
+   sidebar's .collapsed class — .collapsed is the user's persisted gallery
+   preference and the reader must leave it untouched (the previous
+   add/remove of .collapsed here made the sidebar pop up behind the
+   gallery and immediately hide again during route transitions). */
+body.reader-open .sidebar {
+    display: none !important;
+}
+
+/* The floating hamburger is a gallery-section affordance — hiding it while
+   the reader is up (including immersive mode) is handled inside the mobile
+   media query below. */
+
+/* Immersive Mode - reader-only (mobile). Hides the app chrome (sidebar,
+   search header) while reading manga/hmanga books, but keeps the reader's
+   own top bar visible (back button, chapter dropdown, mode switches) so
+   immersive mode is never a dead end. The modal does NOT toggle this state:
+   it's a fullscreen overlay that already covers the chrome, so hiding it
+   there was a no-op whose only effect was chrome vanishing after close.
+   The sidebar (tags / random / favorites) stays accessible in the images
+   and h-manga sections — immersive only ever activates from the reader. */
+@media (max-width: 768px) {
+    body.immersive-mode .sidebar {
+        display: none !important;
+    }
+    
+    body.immersive-mode .top-header {
+        transform: translateY(-100%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        transition: none !important;
+    }
+
+    /* The reader's own top bar REMAINS visible in immersive mode — this is
+       the control surface users can always reach (back button, chapter
+       dropdown). Only the bottom bar slides away. */
+    body.immersive-mode .reader-top-bar {
+        transform: none !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    /* The floating hamburger is a gallery affordance: hidden while reading,
+       including in immersive mode (the reader's own top bar is the only
+       control surface there). */
+    body.reader-open .hamburger-floating,
+    body.immersive-mode .hamburger-floating {
+        display: none !important;
+    }
+	
+    /* Keep the UI-hidden class from sliding the top bar away while
+       immersive — specificity beats the .reader-top-bar.ui-hidden rule. */
+    body.immersive-mode .reader-top-bar.ui-hidden {
+        transform: none !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    /* Floating recovery handle: always-visible tap target that restores
+       the full UI, so immersive mode is never a dead end even for users
+       who miss the tap-again gesture. */
+    body.immersive-mode .immersive-exit-handle {
+        display: flex;
+    }
+    
+    body.immersive-mode .modal {
+        top: 0 !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+    }
+    
+    body.immersive-mode .modal .modal-content {
+        max-height: 100vh !important;
+    }
+}
+
+/* Mobile Reader - Always horizontal fill */
+@media (max-width: 768px) {
+    /* Force fit-width on mobile regardless of data-scale-mode - use !important to override inline styles */
+    .reader-content.view-strip img,
+    .reader-content.view-strip img[data-src] {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: auto !important;
+        min-width: 100vw !important;
+    }
+    
+    .reader-content.view-single img,
+    .reader-content.view-pair img,
+    .reader-content.view-single img[data-src],
+    .reader-content.view-pair img[data-src] {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: auto !important;
+        min-width: 100vw !important;
+    }
+    
+    /* Explicitly allow vertical touch scrolling in reader */
+    .reader-content {
+        touch-action: pan-y;
+    }
+
+    /* Disable hit zones on mobile — taps are handled via JS touch events */
+    .reader-hit-zone {
+        pointer-events: none !important;
+    }
+}
+
+/* Reader UI Hidden State */
+.reader-controls {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.reader-controls.ui-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.reader-controls.reader-top-bar.ui-hidden {
+    transform: translateY(-100%);
+}
+
+.reader-controls.reader-bottom-bar.ui-hidden {
+    transform: translateY(100%);
+}
+
+/* --- SERIES SPLASH --- */
+.series-splash {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    padding: 1.5rem 2rem 2rem;
+}
+
+.splash-header {
+    margin-bottom: 1.5rem;
+}
+
+.splash-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    background-color: var(--bg-elevated);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.splash-back-btn:hover {
+    background-color: var(--border);
+}
+
+.splash-body {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    align-items: start;
+}
+
+.splash-cover {
+    position: relative;
+    aspect-ratio: 2/3;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    background-color: var(--bg-elevated);
+}
+
+.splash-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.splash-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.splash-title {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin: 0;
+    color: var(--text-main);
+}
+
+.splash-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+
+.meta-item strong {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.splash-actions {
+    margin-top: 0.25rem;
+}
+
+.splash-actions .btn-primary {
+    width: auto;
+    min-width: 220px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.splash-description {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    white-space: pre-line;
+}
+
+.splash-source {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.splash-source a {
+    color: var(--primary);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.splash-source a:hover {
+    text-decoration: underline;
+}
+
+.splash-chapters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.splash-chapters h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-main);
+}
+
+.splash-chapter-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-surface);
+    align-content: start;
+}
+
+.splash-chapter-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-md);
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.95rem;
+    transition: var(--transition);
+}
+
+.splash-chapter-row:hover {
+    border-color: var(--primary);
+    background-color: rgba(99, 102, 241, 0.08);
+}
+
+.splash-chapter-row.is-continue {
+    border-color: var(--primary);
+    background-color: rgba(99, 102, 241, 0.12);
+}
+
+.chapter-label {
+    font-weight: 600;
+}
+
+.chapter-pages {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.splash-loading,
+.splash-empty {
+    color: var(--text-muted);
+    padding: 1rem 0;
+}
+
+@media (max-width: 768px) {
+    .series-splash {
+        padding: 1rem;
+    }
+
+    .splash-body {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+
+    .splash-cover {
+        max-width: 260px;
+        margin: 0 auto;
+    }
+
+    .splash-title {
+        font-size: 1.5rem;
+    }
+
+    .splash-actions .btn-primary {
+        width: 100%;
+    }
+}
