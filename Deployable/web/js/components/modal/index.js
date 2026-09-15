@@ -381,11 +381,18 @@ export class MediaModal {
             deleteBtn.style.marginLeft = '4px';
             deleteBtn.style.cursor = 'pointer';
 
-            textSpan.addEventListener('click', () => {
-                // Close via the router (the modal:open route's exit runs
-                // close()), then filter by tag. Direct close() here left a
-                // stale modal:open entry on the nav stack.
-                historyRouter.back();
+            textSpan.addEventListener('click', async () => {
+                // Close the modal and filter by the clicked tag, in order.
+                // back() is async (popstate fires later), so filtering
+                // immediately after it raced the router: setActiveTag's
+                // replace() overwrote the still-open modal:open entry, then
+                // the pending history.back() popped to the previous gallery
+                // entry with its OLD payload — dropping the tag filter. The
+                // gallery:filterByTag listener then ran against a gallery
+                // that had already re-rendered without the tag.
+                // popOverlays() pops modal:open, runs its exit(), and syncs
+                // the URL synchronously — awaitable, no popstate race.
+                await historyRouter.popOverlays();
                 window.dispatchEvent(new CustomEvent('gallery:filterByTag', { detail: tag }));
             });
 

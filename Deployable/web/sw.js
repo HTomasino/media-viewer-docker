@@ -1,4 +1,4 @@
-﻿// Media Viewer Service Worker v39
+// Media Viewer Service Worker v39
 // v39:
 //  - Strict sequential image loading: in reader sequential mode each image
 //    must finish downloading before the next src is set (initial batch,
@@ -17,7 +17,7 @@
 // v33:
 //  - Mobile sidebar rebuilt as a fixed slide-in drawer: the old in-flow top
 //    strip (max-height 110px, overflow hidden) could not hold nav +
-//    favorites + tags â€” content below the clip line was invisible and the
+//    favorites + tags — content below the clip line was invisible and the
 //    strip could appear behind/under gallery content. The drawer is
 //    position:fixed (80vw/320px, full height, z-index 200) with a tap-to-
 //    close backdrop; the floating hamburger (fixed top-left, z-index 201)
@@ -27,7 +27,7 @@
 //  - Sidebar flicker fix: the reader no longer toggles the sidebar's
 //    .collapsed class (that class is the user's persisted gallery
 //    preference). Reader open/close now uses a dedicated body.reader-open
-//    class â€” CSS hides the sidebar while reading and restores the user's
+//    class — CSS hides the sidebar while reading and restores the user's
 //    preference on close, ending the "pops up behind the gallery then
 //    immediately hides" flicker. _applySectionUI re-asserts the
 //    preference on every section entry.
@@ -46,7 +46,7 @@
 // v28:
 //  - Fix regression from v26: the reader's isMobile() method was shadowed
 //    by the constructor's this.isMobile boolean property, so toggleUI()
-//    threw "isMobile is not a function" on every center tap â€” immersive
+//    threw "isMobile is not a function" on every center tap — immersive
 //    mode (and the exit handle/hint) never activated. toggleUI now reads
 //    the media query directly.
 // v27:
@@ -54,7 +54,7 @@
 //    The mobile sidebar is a column flex container with max-height +
 //    overflow:hidden; .sidebar-nav's overflow-x:auto gave it an automatic
 //    min-height of 0, so flexbox absorbed the entire height deficit by
-//    shrinking the nav â€” the ONLY way to switch sections was untappable.
+//    shrinking the nav — the ONLY way to switch sections was untappable.
 //    Fixed with flex-shrink:0 + min-height:44px on the nav, a tighter
 //    header margin, and shrinkable scan-status.
 // v26:
@@ -66,7 +66,7 @@
 //    strip slimmed 150px -> 110px.
 // v25:
 //  - Mobile sidebar accessibility fix: reader/modal no longer set inline
-//    sidebar display styles â€” body.immersive-mode CSS is the single
+//    sidebar display styles — body.immersive-mode CSS is the single
 //    source of truth (an unmatched inline display:none !important left
 //    the sidebar permanently unreachable, and mobile has no hamburger to
 //    recover it). Favorites/Random and tag-filter sections are now
@@ -74,7 +74,7 @@
 //    settings and tag assignment remain hidden for space.
 // v24:
 //  - "Mark read at bottom" fix: progressStore._upsert now serializes
-//    writes per record key â€” the scroll handler's throttled saveProgress
+//    writes per record key — the scroll handler's throttled saveProgress
 //    could interleave with markComplete's read-modify-write and wipe the
 //    just-written isComplete=true. Also: when every recorded chapter is
 //    complete, the Continue position synthesizes the NEXT chapter (past
@@ -132,7 +132,7 @@
 //  - parseChapterName returns the stripped name in non-numeric fallback
 //    branches for consistency with its numeric branches.
 
-const CACHE_NAME = 'media-viewer-v42';
+const CACHE_NAME = 'media-viewer-v44';
 const API_CACHE_NAME = 'media-viewer-api-v2';
 const API_CACHE_MAX_ENTRIES = 50;
 
@@ -146,7 +146,7 @@ const API_CACHE_PATHS = [
   '/api/tags/stats',
 ];
 
-// Media/thumbnail GETs ARE cacheable by the SW â€” but only when the URL is
+// Media/thumbnail GETs ARE cacheable by the SW — but only when the URL is
 // version-stamped with ?v=<mtime> (bumped on every file edit). Unversioned
 // media URLs (paths are mutable) stay network-only so an edited file's stale
 // bytes can't be served from the cache. The ?v= param arrives once
@@ -157,7 +157,7 @@ const MEDIA_CACHE_PATHS = ['/api/media/', '/api/thumbnail/'];
 
 function isApiCacheable(pathname) {
   // Exact match against the allowlist (the tags endpoints have sub-paths like
-  // /api/tags/stats and /api/tags/:tag/files â€” only /api/tags and /api/tags/stats
+  // /api/tags/stats and /api/tags/:tag/files — only /api/tags and /api/tags/stats
   // are read-only; /api/tags/:path is a POST mutation handled by the network path).
   return API_CACHE_PATHS.includes(pathname);
 }
@@ -169,7 +169,7 @@ function isVersionedMediaUrl(url) {
 
 // Query params that vary with the request's POSITION in a listing (index,
 // total, next/prev path context, preload count) but do NOT change the image
-// bytes the server returns — the backend only uses them to compute the
+// bytes the server returns � the backend only uses them to compute the
 // X-Preload-* response headers. Without normalizing these away, the same
 // image viewed from two different positions (tag-filtered list, different
 // chapter length, modal vs reader) would be stored under two distinct URLs
@@ -186,7 +186,7 @@ function mediaCacheKey(url) {
   // Sort params so keys are insensitive to insertion order: the backend-built
   // preload URLs ('width=..&dpr=..&nocache=1&index=..') and client-built
   // getMediaUrl URLs ('section=..&width=..&v=..') order params differently,
-  // and Cache Storage keys are exact strings — without sorting, the same
+  // and Cache Storage keys are exact strings � without sorting, the same
   // param set in a different order would be two entries.
   const sorted = [...canonical.searchParams.entries()].sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0
@@ -236,7 +236,7 @@ self.addEventListener('install', (event) => {
 });
 
 // Activate - clean up old caches (both the old shell cache AND the API cache
-// from a previous version, so a v7â†’v8 upgrade purges everything).
+// from a previous version, so a v7→v8 upgrade purges everything).
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -307,12 +307,12 @@ async function apiStaleWhileRevalidate(request) {
         putApiCacheEntry(cache, request, response);
       }
     }).catch(() => {
-      // Offline â€” keep serving stale; that's the whole point of SWR.
+      // Offline — keep serving stale; that's the whole point of SWR.
     });
     return cached;
   }
 
-  // No cache â€” go to the network. On success cache the response; on failure
+  // No cache — go to the network. On success cache the response; on failure
   // there's nothing to fall back to, so return 503.
   try {
     const response = await fetch(request);
@@ -359,7 +359,7 @@ function putApiCacheEntry(cache, request, response) {
 // putMediaCacheEntry stores a version-stamped media response and enforces a
 // dedicated LRU bound (mediaCacheLimit, user-configurable), separate from the
 // JSON API LRU so image blobs can't evict files/folders/tags entries.
-// `key` is the canonical mediaCacheKey(url) string — position-only params
+// `key` is the canonical mediaCacheKey(url) string � position-only params
 // (index/total/nextPaths/prevPaths/preloadCount) are already stripped so the
 // same image maps to exactly one entry regardless of where it was viewed.
 function putMediaCacheEntry(cache, key, response) {
@@ -391,7 +391,7 @@ async function apiCacheFirst(request) {
   const key = mediaCacheKey(request.url);
   const cached = await cache.match(new Request(key));
   if (cached) {
-    // LRU touch on hit — derive from the same function that built the stored
+    // LRU touch on hit � derive from the same function that built the stored
     // key so a future param-list change can't desync the order map.
     mediaCacheOrder.delete(key);
     mediaCacheOrder.set(key, Date.now());
