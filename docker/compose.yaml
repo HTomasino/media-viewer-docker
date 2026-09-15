@@ -95,7 +95,7 @@ services:
       # Docker 29.x servers reject (min 1.40) -> crash loop. Pin the API
       # version explicitly.
       - DOCKER_API_VERSION=1.44
-      - WATCHTOWER_SCHEDULE=0 0 4 * * *
+      - WATCHTOWER_SCHEDULE=0 0 * * * *
       - WATCHTOWER_LABEL_ENABLE=true
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_INCLUDE_RESTARTING=true

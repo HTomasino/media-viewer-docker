@@ -165,7 +165,7 @@ carrying the `com.centurylinklabs.watchtower.enable: "true"` label (the
 media-viewer service has it; unrelated containers on the same Docker host are
 not touched).
 
-- Schedule: daily at 04:00 (`WATCHTOWER_SCHEDULE`), cleanup of old images on.
+- Schedule: hourly, on the hour (`WATCHTOWER_SCHEDULE`), cleanup of old images on.
 - Update flow: `./docker/build.sh <tag>` (build + push to GHCR) → watchtower
   pulls the newer `latest` and recreates only the labeled container →
   `media-data` volume and the bind-mounted config survive; the in-memory
