@@ -166,27 +166,32 @@ media-viewer service has it; unrelated containers on the same Docker host are
 not touched).
 
 - Schedule: daily at 04:00 (`WATCHTOWER_SCHEDULE`), cleanup of old images on.
-- Update flow: build/push a new `media-viewer:<tag>` image → watchtower pulls
-  and recreates only the labeled container → `media-data` volume and the
-  bind-mounted config survive; the in-memory index rebuilds on boot.
+- Update flow: `./docker/build.sh <tag>` (build + push to GHCR) → watchtower
+  pulls the newer `latest` and recreates only the labeled container →
+  `media-data` volume and the bind-mounted config survive; the in-memory
+  index rebuilds on boot.
 
-**Registry requirement:** watchtower pulls from a registry — it cannot see
-locally built images. With the compose default `image: media-viewer:latest`
-(build-only, never pushed), watchtower resolves that name against Docker Hub
-and updates never happen. For unattended updates, push the image to a registry
-and point `image:` at the full registry path:
+**Registry requirement:** watchtower pulls from a registry. The compose file
+already points at the published image (`ghcr.io/htomasino/media-viewer:latest`),
+so watchtower works as-is. Note that a locally rebuilt image with the same tag
+shadows the registry one until `docker compose pull` runs.
+
+**Registry:** the image is published to GHCR (`ghcr.io/htomasino/media-viewer`)
+— watchtower pulls it from there; no extra config needed. To publish a new
+build yourself (requires `docker login ghcr.io` with a PAT that has
+`write:packages`):
 
 ```bash
-docker tag media-viewer:latest registry.lan/media-viewer:latest
-docker push registry.lan/media-viewer:latest
-# then set image: registry.lan/media-viewer:latest in compose.yaml
+./docker/build.sh 0.2.0   # builds, pushes ghcr.io/...:0.2.0 and :latest
 ```
 
-If you keep updates manual (no registry), delete the watchtower service from
-the compose file and apply updates with `docker compose up -d` after a rebuild.
+Manual update instead of watchtower:
 
 ```bash
-# manual update instead (or alongside watchtower):
+docker compose pull && docker compose up -d
+```
+
+```bash
 docker compose pull && docker compose up -d
 ```
 
@@ -273,7 +278,7 @@ Log rotation is configured in compose (`json-file`, max 10 MB × 3).
 | Streams killed on slow NAS path | min-rate middleware (`min_write_rate_bytes`) sees <500 KB/s | raise `write_timeout_sec` (grace period) or lower `min_write_rate_bytes` |
 | Stale UI after update | browser/SW cache | hard-refresh; SW is versioned — new origin clients refetch automatically |
 | Tray missing / crashes | n/a | never happens: container runs `-notray`; `-daemon` is also wrong for Docker (PID 1) |
-| Watchtower updates nothing | label missing, or image not in a registry | keep `com.centurylinklabs.watchtower.enable: "true"` on the service; push to a registry and set the full path in `image:` (see §5) |
+| Watchtower updates nothing | label missing, or newer image not pushed to GHCR | keep `com.centurylinklabs.watchtower.enable: "true"` on the service; publish with `./docker/build.sh <tag>` (see §5) |
 
 ## 8. Tuning table
 

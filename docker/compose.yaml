@@ -8,12 +8,9 @@
 
 services:
   media-viewer:
-    # Watchtower can only update images pulled from a REGISTRY. As long as the
-    # image is built locally and never pushed, this `image:` name resolves to
-    # Docker Hub (which doesn't have it) and the update sidecar does nothing.
-    # For unattended updates: push to your registry and set the full path here,
-    # e.g. image: registry.lan/media-viewer:latest
-    image: media-viewer:latest
+    # Published to GHCR so watchtower can pull updates. The build: section is
+    # kept for local rebuilds; compose prefers the local image if present.
+    image: ghcr.io/htomasino/media-viewer:latest
     build:
       context: ..
       dockerfile: backend/Dockerfile
