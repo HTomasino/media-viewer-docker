@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -4795,20 +4796,27 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 		addPreloadHeadersWithCount(c, "/api/media", sanitizedPath, section, bucket, index, total, preloadCount, nextPaths, prevPaths, width, height, dpr)
 	}
 
-	// Step 4: Stream ffmpeg's WebP output directly to the HTTP response.
-	// Bytes flow: ffmpeg â†’ stdoutPipe â†’ HTTP chunked writer â†’ browser.
-	// If the client disconnects, the context is cancelled, ffmpeg is killed,
-	// and io.Copy returns with a write error.
-	c.Stream(func(w io.Writer) bool {
-		_, copyErr := io.Copy(w, stdoutPipe)
-		if copyErr != nil && ctx.Err() != nil {
-			// Context expired (timeout or client disconnect) â€” expected, don't log loudly
-			debugLog("[MEDIA STREAM] ffmpeg stream cancelled for %s: %v", sanitizedPath, ctx.Err())
-		} else if copyErr != nil {
-			log.Printf("[MEDIA STREAM] Error streaming ffmpeg output for %s: %v", sanitizedPath, copyErr)
-		}
-		return false // done streaming
-	})
+	// Step 4: Capture ffmpeg's WebP output, fix the RIFF size header, and
+	// send the complete image with Content-Length.
+	//
+	// WHY NOT STREAM: ffmpeg writing WebP to a non-seekable pipe cannot know
+	// the final size when it emits the RIFF header, so it writes a placeholder
+	// (RIFF size = 8). The resulting file is a structurally invalid RIFF
+	// container: Chromium's WebP demuxer validates the declared size and
+	// REFUSES to decode the image (the <img> fires onerror / stays nw=0), even
+	// though the VP8 data after the header is perfectly fine. This made every
+	// nocache (modal/reader) image "load and cache but not display" while raw
+	// curl checks passed. Buffering the output (a single image is tens to
+	// hundreds of KB) lets us patch the declared RIFF size to the real payload
+	// length and send a complete, Content-Length'd response.
+	stdoutBytes, readErr := io.ReadAll(stdoutPipe)
+
+	if readErr != nil && ctx.Err() != nil {
+		// Context expired (timeout or client disconnect) — expected, don't log loudly
+		debugLog("[MEDIA STREAM] ffmpeg stream cancelled for %s: %v", sanitizedPath, ctx.Err())
+	} else if readErr != nil {
+		log.Printf("[MEDIA STREAM] Error reading ffmpeg output for %s: %v", sanitizedPath, readErr)
+	}
 
 	// Step 5: Wait for ffmpeg to finish and clean up.
 	// cmd.Wait() was called implicitly by CommandContext when the context expired,
@@ -4832,7 +4840,27 @@ func streamWebPViaFfmpeg(c *gin.Context, img *image.NRGBA, cfg *Config, sanitize
 	// This ensures we don't leak the goroutine.
 	<-pipeDone
 
-	debugLog("Streamed responsive image (WebP via ffmpeg): original %s (%dx%d -> %dx%d)", sanitizedPath, origWidth, origHeight, newWidth, newHeight)
+	// Validate and fix the RIFF container: ffmpeg's pipe muxer leaves the
+	// declared size at the placeholder value (8). Rewrite it to the actual
+	// payload length so decoders accept the file. bytes 4..8 = little-endian
+	// uint32 RIFF size (= total file size - 8).
+	if len(stdoutBytes) >= 12 && string(stdoutBytes[0:4]) == "RIFF" && string(stdoutBytes[8:12]) == "WEBP" {
+		binary.LittleEndian.PutUint32(stdoutBytes[4:8], uint32(len(stdoutBytes)-8))
+	}
+
+	if len(stdoutBytes) == 0 {
+		log.Printf("[MEDIA STREAM] ffmpeg produced no output for %s (stderr: %s) — falling back to JPEG", sanitizedPath, stderr.String())
+		return false
+	}
+
+	// Send the complete image. Content-Length now matches the (fixed) body,
+	// so the browser gets a deterministic, decodable response.
+	c.Header("Content-Length", strconv.Itoa(len(stdoutBytes)))
+	if _, writeErr := c.Writer.Write(stdoutBytes); writeErr != nil {
+		log.Printf("[MEDIA STREAM] Error writing WebP response for %s: %v", sanitizedPath, writeErr)
+	}
+
+	debugLog("Streamed responsive image (WebP via ffmpeg): original %s (%dx%d -> %dx%d, %d bytes)", sanitizedPath, origWidth, origHeight, newWidth, newHeight, len(stdoutBytes))
 	return true
 }
 
