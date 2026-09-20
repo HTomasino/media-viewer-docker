@@ -132,16 +132,21 @@
 //  - parseChapterName returns the stripped name in non-numeric fallback
 //    branches for consistency with its numeric branches.
 
-const CACHE_NAME = 'media-viewer-v45';
+const CACHE_NAME = 'media-viewer-v47';
 const API_CACHE_NAME = 'media-viewer-api-v2';
 const API_CACHE_MAX_ENTRIES = 50;
 
 // Read-only GET endpoints eligible for stale-while-revalidate. Only these are
+// Read-only GET endpoints eligible for stale-while-revalidate. Only these are
 // cached; everything else under /api/ (mutations, media streams, thumbnails)
 // falls through to network-only.
+//
+// NOTE: /api/files and /api/folders are deliberately NOT cached. Folder and
+// file lists change whenever content is added server-side; a cached list
+// makes the section grid serve stale chapter data after reading (the
+// "read state / chapter count not updating on back-nav" report). The
+// section-navigation rule is to always pull the latest from the API.
 const API_CACHE_PATHS = [
-  '/api/files',
-  '/api/folders',
   '/api/tags',
   '/api/tags/stats',
 ];

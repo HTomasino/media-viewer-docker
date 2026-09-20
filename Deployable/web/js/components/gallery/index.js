@@ -243,6 +243,11 @@ export class Gallery {
 
         this.addFavoriteBadge(div, book);
 
+        // Per-book read badge: progress is keyed by the book's name, and the
+        // artist view is where the user picks books — show finished books as
+        // read so state visibly updates after reading.
+        this.addBookReadBadge(div, book);
+
         const series = artist;
         const chapterIndex = series?.chapters?.indexOf(book) ?? -1;
 
@@ -388,6 +393,36 @@ export class Gallery {
         placeholder.setAttribute('aria-hidden', 'true');
         info.appendChild(placeholder);
 
+        // H-Manga artist cards: the reader saves progress per BOOK, so the
+        // artist badge must aggregate across all the artist's books (querying
+        // by artist name would always miss — key mismatch). Pick the
+        // most-recently-viewed book with an incomplete record and continue
+        // there.
+        if (galleryState.section === SECTIONS.H_MANGA && Array.isArray(series.chapters)) {
+            const artistProgress = await progress.getArtistContinuePosition(series.name, series.chapters, galleryState.section);
+            if (!artistProgress) {
+                placeholder.remove();
+                return;
+            }
+            const badge = document.createElement('span');
+            badge.className = 'continue-badge';
+            const bookName = artistProgress.bookName || '';
+            // Books are free-form titled; show a compact hint (first 18 chars)
+            // rather than the full title so the badge stays card-sized.
+            const short = bookName.length > 18 ? bookName.slice(0, 17) + '…' : bookName;
+            badge.textContent = `Continue: ${escapeHtml(short)}`;
+            badge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent('gallery:openReader', {
+                    detail: { series, chapterIndex: artistProgress.bookIndex }
+                }));
+            });
+            if (placeholder.parentNode) {
+                placeholder.parentNode.replaceChild(badge, placeholder);
+            }
+            return;
+        }
+
         const progressData = await progress.getContinuePosition(series.name, galleryState.section);
         // Synthesized "next chapter" position (all recorded chapters
         // complete) past the actual chapter list means the series is fully
@@ -419,6 +454,25 @@ export class Gallery {
         if (placeholder.parentNode) {
             placeholder.parentNode.replaceChild(badge, placeholder);
         }
+    }
+
+    /**
+     * Per-book read badge for the h-manga artist view: shows "Read ✓" once
+     * every recorded page/chapter of the book is complete. Fire-and-forget —
+     * the badge only appears when the async IDB query confirms it, so cards
+     * without progress stay unchanged.
+     */
+    addBookReadBadge(div, book) {
+        if (!book?.name) return;
+        const info = div.querySelector('.gallery-item-info');
+        if (!info) return;
+        progress.isSeriesFullyRead(book.name, galleryState.section).then((read) => {
+            if (!read) return;
+            const badge = document.createElement('span');
+            badge.className = 'read-badge';
+            badge.textContent = 'Read ✓';
+            info.appendChild(badge);
+        }).catch(() => {});
     }
 
     addFavoriteBadge(div, item) {

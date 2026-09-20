@@ -169,4 +169,46 @@ export const progressStore = {
         const chapter = progress.find((p) => p.chapterIndex === chapterIndex);
         return chapter?.isComplete || false;
     },
+
+    /**
+     * Artist-level continue position for the h-manga grid. The reader saves
+     * progress per BOOK ("h-manga|<book name>"), but the artist-grid cards
+     * represent the ARTIST — so the badge needs to aggregate across all the
+     * artist's books and pick the most-recently-viewed entry.
+     *
+     * Returns { bookIndex, bookName } for the book the user should continue
+     * in, or null when the artist has no recorded progress. Books with all
+     * recorded chapters complete are skipped unless nothing else remains
+     * (mirroring getContinuePosition's prefer-incomplete rule).
+     */
+    async getArtistContinuePosition(artistName, books, section = null) {
+        if (!Array.isArray(books) || !books.length) return null;
+        let best = null;
+        for (let i = 0; i < books.length; i++) {
+            const book = books[i];
+            if (!book?.name) continue;
+            const progress = await this.getBySeries(book.name, section);
+            if (!progress.length) continue;
+            const incomplete = progress.filter((p) => !p.isComplete);
+            const entry = incomplete.length
+                ? incomplete.reduce((b, c) => ((c.lastViewedAt || 0) > (b.lastViewedAt || 0) ? c : b))
+                : null; // fully-read book: not a continue candidate
+            if (!entry) continue;
+            if (!best || (entry.lastViewedAt || 0) > (best.lastViewedAt || 0)) {
+                best = { bookIndex: i, bookName: book.name, lastViewedAt: entry.lastViewedAt || 0 };
+            }
+        }
+        return best;
+    },
+
+    /**
+     * True when EVERY chapter of the given series that has a progress record
+     * is complete, and at least one record exists. Used by the h-manga
+     * book-card read badge to mark finished books.
+     */
+    async isSeriesFullyRead(seriesName, section = null) {
+        const progress = await this.getBySeries(seriesName, section);
+        if (!progress.length) return false;
+        return progress.every((p) => p.isComplete);
+    },
 };
