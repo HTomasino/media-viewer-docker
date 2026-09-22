@@ -1,4 +1,4 @@
-﻿# Media Viewer Deployment
+# Media Viewer Deployment
 
 ## Quick Start
 
@@ -25,18 +25,18 @@ Then open your browser to `http://localhost:3000`
 
 ```
 ./
-â”œâ”€â”€ media-server.exe        # Main server executable
-â”œâ”€â”€ config.json             # Server configuration
-â”œâ”€â”€ README.md               # This file
-â”œâ”€â”€ tools/
-â”‚   â””â”€â”€ gotify-server.exe   # Push notification server (bundled)
-â””â”€â”€ web/                    # Frontend files
-    â”œâ”€â”€ index.html
-    â”œâ”€â”€ tag-management.html
-    â”œâ”€â”€ manifest.json
-    â”œâ”€â”€ sw.js
-    â”œâ”€â”€ css/
-    â””â”€â”€ js/
+├── media-server.exe        # Main server executable
+├── config.json             # Server configuration
+├── README.md               # This file
+├── tools/
+│   └── gotify-server.exe   # Push notification server (bundled)
+└── web/                    # Frontend files
+    ├── index.html
+    ├── tag-management.html
+    ├── manifest.json
+    ├── sw.js
+    ├── css/
+    └── js/
 ```
 
 ## Configuration
@@ -485,7 +485,7 @@ You can also toggle Discord on/off and push pending notifications from this pane
 
 Instead of editing config.json directly, you can configure Discord entirely in the browser:
 
-1. Go to **Tag Management** â†’ **Discord Settings**.
+1. Go to **Tag Management** → **Discord Settings**.
 2. Paste the bot token into **Bot Token**.
 3. Paste your Discord user ID into **Recipient User ID**.
 4. Adjust the cooldown if desired.

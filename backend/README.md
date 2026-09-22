@@ -1,4 +1,4 @@
-﻿# Media Viewer Go Backend
+# Media Viewer Go Backend
 
 ## Overview
 A complete Go-based backend server for the Media Viewer application. Single executable file with all dependencies embedded - no runtime dependencies required.
@@ -8,7 +8,7 @@ A complete Go-based backend server for the Media Viewer application. Single exec
 - **Size**: ~8.5 MB (with debug symbols)
 - **Optimized**: ~6 MB with `-ldflags "-s -w"`
 - **Windows tray mode**: build with `-ldflags "-s -w -H windowsgui"` to produce a
-  GUI-subsystem binary with no console window â€” the app runs entirely in the
+  GUI-subsystem binary with no console window — the app runs entirely in the
   system tray (no taskbar item, no close button that can kill it). Logs go to
   `server.log` next to the executable; use the tray's "Show Window" to open an
   on-demand console for live log viewing. Use `-notray` for a normal console app.
@@ -35,27 +35,27 @@ A complete Go-based backend server for the Media Viewer application. Single exec
 ### Complete Deployment Structure
 ```
 media-server-deployment/
-â”œâ”€â”€ media-server.exe          # Main server executable
-â”œâ”€â”€ config.json               # Server configuration
-â”œâ”€â”€ .thumbnails/              # Thumbnail cache (auto-created)
-â”‚   â”œâ”€â”€ abc123.jpg           # Legacy base-tier thumbnails
-â”‚   â””â”€â”€ responsive/          # Responsive image cache
-â”‚       â”œâ”€â”€ 640/            # 640px bucket
-â”‚       â”œâ”€â”€ 1024/           # 1024px bucket
-â”‚       â””â”€â”€ 1920/           # 1920px bucket
-â”œâ”€â”€ logs/                     # Log files (if using -daemon)
-â”‚   â””â”€â”€ server.log
-â””â”€â”€ web/                      # Frontend files (optional, for static serving)
-    â”œâ”€â”€ index.html
-    â”œâ”€â”€ styles.css
-    â”œâ”€â”€ script.js
-    â””â”€â”€ ...
+├── media-server.exe          # Main server executable
+├── config.json               # Server configuration
+├── .thumbnails/              # Thumbnail cache (auto-created)
+│   ├── abc123.jpg           # Legacy base-tier thumbnails
+│   └── responsive/          # Responsive image cache
+│       ├── 640/            # 640px bucket
+│       ├── 1024/           # 1024px bucket
+│       └── 1920/           # 1920px bucket
+├── logs/                     # Log files (if using -daemon)
+│   └── server.log
+└── web/                      # Frontend files (optional, for static serving)
+    ├── index.html
+    ├── styles.css
+    ├── script.js
+    └── ...
 
 # Media directories (configured in config.json)
 Z:/Downloads/
-â”œâ”€â”€ Other/                    # Images section
-â”œâ”€â”€ Manga/                    # Manga section
-â””â”€â”€ H-Manga/                  # H-Manga section
+├── Other/                    # Images section
+├── Manga/                    # Manga section
+└── H-Manga/                  # H-Manga section
 ```
 
 ## API Endpoints
@@ -106,7 +106,7 @@ Z:/Downloads/
 | Option | Default | Description |
 |--------|---------|-------------|
 | `port` | 3000 | Server port |
-| `directories` | `{}` | Map of section â†’ directory paths |
+| `directories` | `{}` | Map of section → directory paths |
 | `thumbnail_dir` | "./.thumbnails" | Thumbnail cache directory |
 | `watch_directories` | true | Enable file watching |
 | `mode` | "release" | "debug" or "release" mode |
@@ -151,14 +151,14 @@ Link: </api/thumbnail/.../img_06.jpg?>; rel=preload; as=image
 **Cache Structure:**
 ```
 .thumbnails/
-â”œâ”€â”€ abc123.jpg                 # Legacy base-tier thumbnails
-â””â”€â”€ responsive/
-    â”œâ”€â”€ 640/
-    â”‚   â””â”€â”€ abc123.jpg        # 640px bucket
-    â”œâ”€â”€ 1024/
-    â”‚   â””â”€â”€ abc123.jpg        # 1024px bucket
-    â””â”€â”€ 1920/
-        â””â”€â”€ abc123.jpg        # 1920px bucket
+├── abc123.jpg                 # Legacy base-tier thumbnails
+└── responsive/
+    ├── 640/
+    │   └── abc123.jpg        # 640px bucket
+    ├── 1024/
+    │   └── abc123.jpg        # 1024px bucket
+    └── 1920/
+        └── abc123.jpg        # 1920px bucket
 ```
 
 **Bucket Calculation:**
